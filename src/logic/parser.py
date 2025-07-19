@@ -1,64 +1,43 @@
 # src/logic/parser.py
 
-from typing import Dict, Any, Tuple
-from pydantic import ValidationError, TypeAdapter
-from src.core.models.transaction import Transaction
-from src.core.models.response import ErroredTransaction
-from src.core.enums.transaction_type import TransactionType
+from typing import Any, Tuple
+from pydantic import ValidationError, TypeAdapter # Keep TypeAdapter for individual validation
+
+from src.core.models.transaction import Transaction # This is needed
+from src.core.models.response import ErroredTransaction # This is needed
+from src.core.enums.transaction_type import TransactionType # This is needed
 
 class TransactionParser:
     """
-    Responsible for parsing raw transaction data (dictionaries) into Pydantic Transaction models
-    and performing initial validations. It identifies and separates successfully parsed
-    transactions from those with parsing or basic validation errors.
+    Parses raw transaction dictionaries into validated Transaction objects.
+    Handles data type conversions and initial validation using Pydantic.
     """
-
     def __init__(self):
-        # TypeAdapter is a Pydantic v2 feature for validating lists of models efficiently
-        self._transaction_list_adapter = TypeAdapter(list[Transaction])
-
+        # Initialize TypeAdapter for a SINGLE Transaction object, not a list of them.
+        # This adapter will be used to validate each dictionary individually.
+        self._single_transaction_adapter = TypeAdapter(Transaction)
 
     def parse_transactions(
-         self, raw_transactions: list[dict[str, Any]]
+        self, raw_transactions_data: list[dict[str, Any]] # Renamed parameter for clarity: expecting list of dictionaries
     ) -> Tuple[list[Transaction], list[ErroredTransaction]]:
-      
         """
-        Parses a list of raw transaction dictionaries into Transaction Pydantic models.
-        Separates valid transactions from errored ones.
-
-        Args:
-            raw_transactions: A list of dictionaries, each representing a raw transaction.
-
-        Returns:
-            A tuple containing:
-            - A list of successfully parsed Transaction objects.
-            - A list of ErroredTransaction objects for transactions that failed parsing.
+        Parses a list of raw transaction dictionaries into validated Transaction objects
+        and identifies any that fail validation.
         """
         parsed_transactions: list[Transaction] = []
         errored_transactions: list[ErroredTransaction] = []
 
-        for raw_txn in raw_transactions:
-            transaction_id = raw_txn.get("transaction_id", "UNKNOWN_ID")
+        for raw_txn_data in raw_transactions_data: # Iterate over each raw dictionary
+            # Get transaction_id for error reporting BEFORE attempting validation
+            # We expect raw_txn_data to be a dictionary here, so .get() is appropriate.
+            transaction_id = raw_txn_data.get("transaction_id", "UNKNOWN_ID_BEFORE_PARSE")
+
             try:
-                # Attempt to parse the raw dictionary into a Transaction model
-                # Pydantic handles type coercion and basic validation (e.g., date format, positive numbers)
-                parsed_txn = self._transaction_list_adapter.validate_python([raw_txn])[0]
-
-                # Additional business logic validation: Check if transaction_type is valid
-                if not TransactionType.is_valid(parsed_txn.transaction_type):
-                    errored_transactions.append(
-                        ErroredTransaction(
-                            transaction_id=transaction_id,
-                            error_reason=f"Invalid transaction_type: '{parsed_txn.transaction_type}'. "
-                                         f"Must be one of {TransactionType.list()}."
-                        )
-                    )
-                    continue # Skip to the next transaction if type is invalid
-
-                parsed_transactions.append(parsed_txn)
-
+                # Use the _single_transaction_adapter to validate the current raw dictionary
+                validated_txn = self._single_transaction_adapter.validate_python(raw_txn_data)
+                parsed_transactions.append(validated_txn)
             except ValidationError as e:
-                # Pydantic ValidationError captures detailed validation issues
+                # Collect detailed error messages from Pydantic
                 error_messages = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
                 errored_transactions.append(
                     ErroredTransaction(
@@ -71,8 +50,7 @@ class TransactionParser:
                 errored_transactions.append(
                     ErroredTransaction(
                         transaction_id=transaction_id,
-                        error_reason=f"Unexpected parsing error: {str(e)}"
+                        error_reason=f"Unexpected parsing error: {type(e).__name__}: {str(e)}"
                     )
                 )
-
         return parsed_transactions, errored_transactions
