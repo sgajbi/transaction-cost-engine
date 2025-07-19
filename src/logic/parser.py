@@ -15,7 +15,8 @@ class TransactionParser:
 
     def __init__(self):
         # TypeAdapter is a Pydantic v2 feature for validating lists of models efficiently
-        self._transaction_list_adapter = TypeAdapter(List[Transaction])
+        self._transaction_list_adapter = TypeAdapter(list[Transaction])
+
 
     def parse_transactions(
          self, raw_transactions: list[dict[str, Any]]
