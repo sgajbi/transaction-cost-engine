@@ -1,12 +1,12 @@
 # src/logic/cost_calculator.py
 
-from typing import Protocol
+from typing import Protocol, Optional # Added Optional
 from decimal import Decimal, getcontext
 
 from src.core.models.transaction import Transaction
 from src.core.enums.transaction_type import TransactionType
-from src.logic.disposition_engine import DispositionEngine # Import the engine
-from src.logic.error_reporter import ErrorReporter # Import the error reporter
+from src.logic.disposition_engine import DispositionEngine
+from src.logic.error_reporter import ErrorReporter
 
 # Set precision for Decimal calculations (e.g., 10 decimal places)
 getcontext().prec = 10
@@ -45,7 +45,8 @@ class BuyStrategy:
         transaction.gross_cost = Decimal(str(transaction.gross_transaction_amount))
 
         # Net = gross + fees + accrued_interest
-        total_fees = Decimal(str(transaction.fees.total_fees)) if transaction.fees else Decimal(0)
+        # transaction.fees.total_fees will now correctly return Decimal
+        total_fees = transaction.fees.total_fees if transaction.fees else Decimal(0)
         accrued_interest = Decimal(str(transaction.accrued_interest)) if transaction.accrued_interest is not None else Decimal(0)
 
         transaction.net_cost = transaction.gross_cost + total_fees + accrued_interest
@@ -160,8 +161,7 @@ class CostCalculator:
         self._error_reporter = error_reporter
         self._strategies: dict[TransactionType, TransactionCostStrategy] = {
             TransactionType.BUY: BuyStrategy(),
-            TransactionType.BUY: BuyStrategy(),
-            TransactionType.SELL: SellStrategy(),
+            TransactionType.SELL: SellStrategy(), # Removed duplicate BUY entry
             TransactionType.INTEREST: DefaultStrategy(),
             TransactionType.DIVIDEND: DefaultStrategy(),
             TransactionType.DEPOSIT: DefaultStrategy(),

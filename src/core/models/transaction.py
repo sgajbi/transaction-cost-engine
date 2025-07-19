@@ -2,24 +2,24 @@
 
 from datetime import date
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field, condecimal, PositiveFloat
+from pydantic import BaseModel, Field, condecimal
+from decimal import Decimal # Added for Decimal type hinting
 
 class Fees(BaseModel):
     """
     Represents various fees associated with a transaction.
     All fee fields are optional and default to 0.0 if not provided.
     """
-    stamp_duty: condecimal(ge=0) = Field(default=0.0, description="Stamp duty fee")
-    exchange_fee: condecimal(ge=0) = Field(default=0.0, description="Exchange fee")
-    gst: condecimal(ge=0) = Field(default=0.0, description="Goods and Services Tax")
-    brokerage: condecimal(ge=0) = Field(default=0.0, description="Brokerage fee")
-    other_fees: condecimal(ge=0) = Field(default=0.0, description="Any other miscellaneous fees")
+    stamp_duty: condecimal(ge=0) = Field(default=Decimal(0), description="Stamp duty fee") # Changed default to Decimal
+    exchange_fee: condecimal(ge=0) = Field(default=Decimal(0), description="Exchange fee") # Changed default to Decimal
+    gst: condecimal(ge=0) = Field(default=Decimal(0), description="Goods and Services Tax") # Changed default to Decimal
+    brokerage: condecimal(ge=0) = Field(default=Decimal(0), description="Brokerage fee") # Changed default to Decimal
+    other_fees: condecimal(ge=0) = Field(default=Decimal(0), description="Any other miscellaneous fees") # Changed default to Decimal
 
     @property
-    def total_fees(self) -> float:
+    def total_fees(self) -> Decimal: # FIX: Changed return type to Decimal
         """Calculates the sum of all fees."""
-        # Use .as_tuple() and check for nan/infinity if condecimal allows them, though not expected with ge=0
-        return float(
+        return ( # FIX: Removed float() cast
             self.stamp_duty +
             self.exchange_fee +
             self.gst +
@@ -40,11 +40,11 @@ class Transaction(BaseModel):
     transaction_type: str = Field(..., description="Type of transaction (e.g., BUY, SELL, DIVIDEND)")
     transaction_date: date = Field(..., description="Date the transaction occurred (ISO format)")
     settlement_date: date = Field(..., description="Date the transaction settled (ISO format)")
-    quantity: PositiveFloat = Field(..., description="Quantity of the instrument involved in the transaction")
+    quantity: condecimal(ge=0) = Field(..., description="Quantity of the instrument involved in the transaction") # FIX: Changed from PositiveFloat to condecimal
     gross_transaction_amount: condecimal(ge=0) = Field(..., description="Gross amount of the transaction")
     net_transaction_amount: Optional[condecimal(ge=0)] = Field(None, description="Net amount of the transaction (optional, can be input or calculated)")
     fees: Optional[Fees] = Field(default_factory=Fees, description="Detailed breakdown of fees")
-    accrued_interest: Optional[condecimal(ge=0)] = Field(default=0.0, description="Accrued interest for the transaction")
+    accrued_interest: Optional[condecimal(ge=0)] = Field(default=Decimal(0), description="Accrued interest for the transaction") # Changed default to Decimal
     average_price: Optional[condecimal(ge=0)] = Field(None, description="Average price of the instrument at the time of transaction")
     trade_currency: str = Field(..., alias="tradeCurrency", description="Currency of the transaction")
 
