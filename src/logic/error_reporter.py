@@ -1,17 +1,19 @@
 # src/logic/error_reporter.py
 
-from typing import Dict, Any, Optional
-from src.core.models.response import ErroredTransaction
+from typing import Any, Optional # Keep these if still used elsewhere in the file
+# Removed List, Dict as we use built-in generics like list[T], dict[K,V]
+
+from src.core.models.response import ErroredTransaction # <--- ENSURE THIS IMPORT IS PRESENT
 
 class ErrorReporter:
     """
     Manages the collection and reporting of processing errors for transactions.
     """
-
     def __init__(self):
-        self._errored_transactions: dict[str, ErroredTransaction] = {} 
-   
-    def get_errors(self) -> list[ErroredTransaction]:
+        # Changed Dict[str, ErroredTransaction] to dict[str, ErroredTransaction]
+        self._errored_transactions: dict[str, ErroredTransaction] = {}
+
+    def add_error(self, transaction_id: str, error_reason: str):
         """
         Adds an error for a specific transaction. If an error for the same
         transaction ID already exists, it updates the reason or appends to it.
@@ -34,7 +36,7 @@ class ErrorReporter:
         """
         self.add_error(errored_txn.transaction_id, errored_txn.error_reason)
 
-    def get_errors(self) -> List[ErroredTransaction]:
+    def get_errors(self) -> list[ErroredTransaction]: # <--- CHANGED List to list
         """
         Returns a list of all collected errored transactions.
         """
