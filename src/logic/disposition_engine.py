@@ -1,9 +1,10 @@
 # src/logic/disposition_engine.py
 
 from collections import defaultdict, deque
-from typing import Deque, Optional, Tuple # Removed Dict, List as we use built-in generics
-from decimal import Decimal, getcontext # Use Decimal for precise financial calculations
-from src.core.models.transaction import Transaction # <--- ADD THIS LINE
+from typing import Deque, Optional, Tuple
+from decimal import Decimal, getcontext
+from src.core.models.transaction import Transaction
+from src.core.enums.transaction_type import TransactionType # FIX: Added this import
 
 # Set precision for Decimal calculations (e.g., 10 decimal places)
 getcontext().prec = 10
@@ -12,8 +13,8 @@ class CostLot:
     """Represents a single 'lot' of securities acquired through a BUY transaction."""
     def __init__(self, transaction_id: str, quantity: Decimal, cost_per_share: Decimal):
         self.transaction_id = transaction_id
-        self.original_quantity = quantity # The initial quantity of this lot
-        self.remaining_quantity = quantity # Quantity still available in this lot
+        self.original_quantity = quantity
+        self.remaining_quantity = quantity
         self.cost_per_share = cost_per_share
 
     @property
@@ -35,7 +36,7 @@ class DispositionEngine:
     """
     def __init__(self):
         # Stores cost lots: { (portfolio_id, instrument_id): Deque[CostLot] }
-        self._open_lots: dict[tuple[str, str], deque[CostLot]] = defaultdict(deque) # Changed Dict and Tuple to dict and tuple
+        self._open_lots: dict[tuple[str, str], deque[CostLot]] = defaultdict(deque)
 
     def add_buy_lot(self, transaction: Transaction):
         """
@@ -49,10 +50,7 @@ class DispositionEngine:
         quantity = Decimal(str(transaction.quantity))
         net_cost = Decimal(str(transaction.net_cost))
 
-        # Handle potential division by zero if quantity is 0, though Pydantic 'PositiveFloat' should prevent this for input
         if quantity == 0:
-            # For a 0 quantity BUY, we don't add a lot that can be sold against
-            # Potentially an error, but disposition engine doesn't report it
             return
 
         cost_per_share = net_cost / quantity
@@ -77,7 +75,7 @@ class DispositionEngine:
 
     def consume_sell_quantity_fifo(
         self, transaction: Transaction
-    ) -> Tuple[Decimal, Decimal, Optional[str]]: # Tuple is from typing, so it's fine
+    ) -> Tuple[Decimal, Decimal, Optional[str]]:
         """
         Consumes quantity from open lots using FIFO method for a SELL transaction.
         Calculates the total matched cost and returns it along with consumed quantity.
@@ -97,7 +95,6 @@ class DispositionEngine:
         total_matched_cost = Decimal(0)
         consumed_quantity = Decimal(0)
 
-        # Check if enough quantity is available first
         available_qty = self.get_available_quantity(portfolio_id=key[0], instrument_id=key[1])
         if required_quantity > available_qty:
             return (
@@ -109,34 +106,34 @@ class DispositionEngine:
         lots_for_instrument = self._open_lots[key]
 
         while required_quantity > 0 and lots_for_instrument:
-            current_lot = lots_for_instrument[0] # FIFO: get the oldest lot
+            current_lot = lots_for_instrument[0]
 
             if current_lot.remaining_quantity >= required_quantity:
-                # Lot can cover the remaining required quantity
                 total_matched_cost += required_quantity * current_lot.cost_per_share
                 consumed_quantity += required_quantity
                 current_lot.remaining_quantity -= required_quantity
-                required_quantity = Decimal(0) # All required quantity consumed
+                required_quantity = Decimal(0)
                 if current_lot.remaining_quantity == 0:
-                    lots_for_instrument.popleft() # Remove fully consumed lot
+                    lots_for_instrument.popleft()
             else:
-                # Lot cannot fully cover, consume what's available in this lot
                 total_matched_cost += current_lot.remaining_quantity * current_lot.cost_per_share
                 consumed_quantity += current_lot.remaining_quantity
                 required_quantity -= current_lot.remaining_quantity
-                lots_for_instrument.popleft() # This lot is now fully consumed
+                lots_for_instrument.popleft()
 
         return total_matched_cost, consumed_quantity, None
 
-    def get_all_open_lots(self) -> dict[tuple[str, str], deque[CostLot]]: # Changed Dict and Tuple to dict and tuple
+    def get_all_open_lots(self) -> dict[tuple[str, str], deque[CostLot]]:
         """For debugging or testing: returns the current state of all open lots."""
         return self._open_lots
 
-    def set_initial_lots(self, transactions: list[Transaction]): # Changed List to list
+    def set_initial_lots(self, transactions: list[Transaction]):
         """
         Initializes the disposition engine with existing BUY transactions.
         This is crucial for processing new SELLs against existing holdings.
         """
         for txn in transactions:
+            # Check if txn.transaction_type is of type TransactionType (enum) or string.
+            # It should be a string value from the enum as per the Pydantic model conversion.
             if txn.transaction_type == TransactionType.BUY.value:
                 self.add_buy_lot(txn)

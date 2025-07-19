@@ -1,9 +1,12 @@
 # src/core/models/request.py
 
+import logging # Added
 from pydantic import BaseModel, Field
 # REMOVED: from src.core.models.transaction import Transaction
 # This import is no longer needed here because we are explicitly handling dictionaries
 # and letting the parser validate them into Transaction models.
+
+logger = logging.getLogger(__name__) # Added
 
 class TransactionProcessingRequest(BaseModel):
     """
