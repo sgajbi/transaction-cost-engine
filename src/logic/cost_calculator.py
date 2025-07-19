@@ -77,21 +77,21 @@ class SellStrategy:
         error_reporter: ErrorReporter
     ) -> None:
         """
-        Calculates Realized Gain/Loss for a SELL transaction using FIFO cost matching.
-        Additionally, sets gross_cost and net_cost to the negative of the matched cost.
+        Calculates Realized Gain/Loss for a SELL transaction using the disposition engine,
+        and sets gross_cost/net_cost to the negative of the matched cost.
         """
         sell_quantity = Decimal(str(transaction.quantity))
         sell_proceeds = Decimal(str(transaction.gross_transaction_amount))
 
+        # Use the generic consume_sell_quantity which delegates to the chosen strategy
         total_matched_cost, consumed_quantity, error_reason = \
-            disposition_engine.consume_sell_quantity_fifo(transaction)
+            disposition_engine.consume_sell_quantity(transaction)
 
         if error_reason:
             # If disposition engine reports an error (e.g., insufficient quantity)
             error_reporter.add_error(transaction.transaction_id, error_reason)
             transaction.realized_gain_loss = None # Or Decimal(0), based on desired behavior for errored sells
             # Mark the transaction as failed by setting error_reason directly on the transaction
-            # (though the ErrorReporter also tracks it)
             transaction.error_reason = error_reason
             # Even if errored, we can still set the costs to 0 or None if that's desired for errored sells
             transaction.gross_cost = Decimal(0)

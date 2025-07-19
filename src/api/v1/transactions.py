@@ -1,6 +1,5 @@
 # src/api/v1/transactions.py
 
-import logging # Added
 from fastapi import APIRouter, Depends, HTTPException, status
 from src.core.models.request import TransactionProcessingRequest
 from src.core.models.response import TransactionProcessingResponse
@@ -10,20 +9,34 @@ from src.logic.sorter import TransactionSorter
 from src.logic.disposition_engine import DispositionEngine
 from src.logic.cost_calculator import CostCalculator
 from src.logic.error_reporter import ErrorReporter
-
-logger = logging.getLogger(__name__) # Added
+# NEW IMPORTS for configurable cost method
+from src.core.config import settings
+from src.core.enums.cost_method import CostMethod
+from src.logic.cost_basis_strategies import FIFOBasisStrategy, AverageCostBasisStrategy, CostBasisStrategy
 
 router = APIRouter()
 
 # Dependency for TransactionProcessor and its components
-# This function will be called by FastAPI's dependency injection system
-# for each request, ensuring a fresh instance for stateless processing.
 def get_transaction_processor() -> TransactionProcessor:
     """
-    Provides a new instance of TransactionProcessor with its dependencies.
+    Provides a new instance of TransactionProcessor with its dependencies,
+    configured with the selected cost basis method.
     """
     error_reporter = ErrorReporter()
-    disposition_engine = DispositionEngine()
+
+    # Determine which cost basis strategy to use based on configuration
+    chosen_cost_basis_strategy: CostBasisStrategy
+    if settings.COST_BASIS_METHOD == CostMethod.FIFO:
+        chosen_cost_basis_strategy = FIFOBasisStrategy()
+    elif settings.COST_BASIS_METHOD == CostMethod.AVERAGE_COST:
+        chosen_cost_basis_strategy = AverageCostBasisStrategy()
+    else:
+        # This case should ideally not be reached if CostMethod enum is exhaustive
+        raise ValueError(f"Unknown COST_BASIS_METHOD: {settings.COST_BASIS_METHOD}")
+
+    # Initialize DispositionEngine with the chosen strategy
+    disposition_engine = DispositionEngine(cost_basis_strategy=chosen_cost_basis_strategy) # MODIFIED: Pass strategy
+
     cost_calculator = CostCalculator(
         disposition_engine=disposition_engine,
         error_reporter=error_reporter
@@ -42,7 +55,8 @@ def get_transaction_processor() -> TransactionProcessor:
     summary="Process financial transactions and calculate costs",
     description="Accepts new and existing transactions, merges, sorts, "
                 "calculates net cost, gross cost, and realized gain/loss "
-                "using FIFO, and returns processed and errored transactions."
+                "using the configured cost basis method (FIFO or Average Cost), " # MODIFIED: updated description
+                "and returns processed and errored transactions."
 )
 async def process_transactions_endpoint(
     request: TransactionProcessingRequest,
@@ -51,30 +65,11 @@ async def process_transactions_endpoint(
     """
     API endpoint to process financial transactions.
     """
-    logger.info(f"API Endpoint: Type of request.existing_transactions: {type(request.existing_transactions)}") # Added
-    if request.existing_transactions: # Added
-        logger.info(f"API Endpoint: Type of first item in request.existing_transactions: {type(request.existing_transactions[0])}") # Added
-    else: # Added
-        logger.info("API Endpoint: existing_transactions list is empty or None.") # Added
-
-    logger.info(f"API Endpoint: Type of request.new_transactions: {type(request.new_transactions)}") # Added
-    if request.new_transactions: # Added
-        logger.info(f"API Endpoint: Type of first item in request.new_transactions: {type(request.new_transactions[0])}") # Added
-    else: # Added
-        logger.info("API Endpoint: new_transactions list is empty or None.") # Added
-
-    try: # Added try-except for better error reporting at API level
-        processed, errored = processor.process_transactions(
-            existing_transactions_raw=request.existing_transactions,
-            new_transactions_raw=request.new_transactions
-        )
-        return TransactionProcessingResponse(
-            processed_transactions=processed,
-            errored_transactions=errored
-        )
-    except Exception as e: # Added try-except
-        logger.exception("API Endpoint: An unhandled error occurred during transaction processing.") # Added
-        raise HTTPException( # Added
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, # Added
-            detail=f"An unexpected error occurred: {str(e)}" # Added
-        )
+    processed, errored = processor.process_transactions(
+        existing_transactions_raw=request.existing_transactions,
+        new_transactions_raw=request.new_transactions
+    )
+    return TransactionProcessingResponse(
+        processed_transactions=processed,
+        errored_transactions=errored
+    )

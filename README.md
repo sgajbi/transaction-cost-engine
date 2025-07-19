@@ -30,7 +30,10 @@ A FastAPI-based microservice designed to process financial transactions, calcula
 ## Features
 
   * **Comprehensive Transaction Processing**: Ingests lists of both new and existing transactions for integrated processing.
-  * **FIFO Cost Basis Calculation**: Accurately tracks and calculates cost basis for assets using the First-In, First-Out method.
+  * **Cost Calculation**: Calculates `net_cost`, `gross_cost`, and `realized_gain_loss` for various transaction types.
+  * **Configurable Cost Basis Methods**: Supports different methods for calculating the cost basis of sold securities.
+     * **FIFO (First-In, First-Out)**: The default method, where the oldest acquired shares are considered sold first.
+     * **Average Cost**: Calculates a weighted average cost for all shares held, and uses this average for disposition.  
   * **Realized Gain/Loss Calculation**: Determines the realized gain or loss for `SELL` transactions based on the matched cost lots.
   * **Decimal Precision**: Utilizes Python's `decimal.Decimal` type for all financial calculations to ensure high precision and prevent floating-point inaccuracies.
   * **Robust Data Validation**: Leverages Pydantic for strict schema validation of incoming transaction data.
@@ -265,6 +268,24 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 ```
+
+## Configuration
+
+The application's behavior can be configured using environment variables. Create a `.env` file in the root directory of your project (next to `pyproject.toml`).
+
+### `COST_BASIS_METHOD`
+
+This variable determines which cost basis method the engine will use for calculating gains/losses on SELL transactions.
+
+* **Allowed values**: `FIFO` (default), `AVERAGE_COST`
+* **Example `.env` file for FIFO (default):**
+    ```env
+    COST_BASIS_METHOD=FIFO
+    ```
+* **Example `.env` file for Average Cost:**
+    ```env
+    COST_BASIS_METHOD=AVERAGE_COST
+    ```
 
 ## Key Design Principles
 

@@ -88,38 +88,26 @@ class TransactionProcessor:
                 self._error_reporter.add_error(transaction.transaction_id, transaction.error_reason)
                 continue
 
-            # CRITICAL FIX: Only calculate costs for NEW transactions.
-            # Existing transactions are only used to initialize the disposition engine's state.
-            if transaction.transaction_id in new_transaction_ids:
-                try:
-                    # The CostCalculator determines the strategy and updates the transaction object in-place.
-                    self._cost_calculator.calculate_transaction_costs(transaction)
+            try:
+                # The CostCalculator determines the strategy and updates the transaction object in-place.
+                self._cost_calculator.calculate_transaction_costs(transaction)
 
-                    # After cost calculation, check if any new error was added to the transaction
-                    if transaction.error_reason:
-                        self._error_reporter.add_error(transaction.transaction_id, transaction.error_reason)
-                    else:
-                        processed_transactions.append(transaction)
-                except Exception as e:
-                    logger.error(f"Unexpected error during cost calculation for transaction {transaction.transaction_id}: {e}")
-                    # Mark the transaction with an error and add it to the reporter
-                    transaction.error_reason = f"Unexpected processing error: {type(e).__name__}: {str(e)}"
+                # After cost calculation, check if any new error was added to the transaction
+                if transaction.error_reason:
                     self._error_reporter.add_error(transaction.transaction_id, transaction.error_reason)
-            else:
-                # For existing transactions, if they are not errored, they are implicitly "processed" by
-                # contributing to the initial state of the disposition engine.
-                # We do not add them to processed_transactions output as per problem statement
-                # which asks for processed *new* transactions.
-                pass
-
+                else:
+                    processed_transactions.append(transaction)
+            except Exception as e:
+                logger.error(f"Unexpected error during cost calculation for transaction {transaction.transaction_id}: {e}")
+                # Mark the transaction with an error and add it to the reporter
+                transaction.error_reason = f"Unexpected processing error: {type(e).__name__}: {str(e)}"
+                self._error_reporter.add_error(transaction.transaction_id, transaction.error_reason)
 
         # 6. Collect all errors reported during parsing and processing
         final_errored_transactions = self._error_reporter.get_errors()
 
         # 7. Filter processed transactions to return only those corresponding to the *new* input transactions
         # This ensures the API response matches the expected output for new transactions.
-        # The 'processed_transactions' list already only contains new transactions due to the fix above,
-        # but this re-confirms for clarity and robustness.
         final_processed_new_transactions = [
             txn for txn in processed_transactions
             if txn.transaction_id in new_transaction_ids
