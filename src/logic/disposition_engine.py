@@ -3,6 +3,7 @@
 from collections import defaultdict, deque
 from typing import Deque, Optional, Tuple # Removed Dict, List as we use built-in generics
 from decimal import Decimal, getcontext # Use Decimal for precise financial calculations
+from src.core.models.transaction import Transaction # <--- ADD THIS LINE
 
 # Set precision for Decimal calculations (e.g., 10 decimal places)
 getcontext().prec = 10
