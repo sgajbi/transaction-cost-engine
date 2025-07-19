@@ -1,6 +1,6 @@
 # src/logic/cost_calculator.py
 
-from typing import Protocol, Optional # Added Optional
+from typing import Protocol, Optional
 from decimal import Decimal, getcontext
 
 from src.core.models.transaction import Transaction
@@ -78,13 +78,10 @@ class SellStrategy:
     ) -> None:
         """
         Calculates Realized Gain/Loss for a SELL transaction using FIFO cost matching.
+        Additionally, sets gross_cost and net_cost to the negative of the matched cost.
         """
         sell_quantity = Decimal(str(transaction.quantity))
         sell_proceeds = Decimal(str(transaction.gross_transaction_amount))
-
-        # Gross/Net cost are not applicable for SELLs in the same way as BUYs
-        transaction.gross_cost = Decimal(0)
-        transaction.net_cost = Decimal(0)
 
         total_matched_cost, consumed_quantity, error_reason = \
             disposition_engine.consume_sell_quantity_fifo(transaction)
@@ -96,14 +93,24 @@ class SellStrategy:
             # Mark the transaction as failed by setting error_reason directly on the transaction
             # (though the ErrorReporter also tracks it)
             transaction.error_reason = error_reason
+            # Even if errored, we can still set the costs to 0 or None if that's desired for errored sells
+            transaction.gross_cost = Decimal(0)
+            transaction.net_cost = Decimal(0)
             return
 
         # Realized Gain/Loss = sell proceeds - matched buy cost
         # Only calculate if a valid quantity was consumed
         if consumed_quantity > 0:
             transaction.realized_gain_loss = sell_proceeds - total_matched_cost
+            # Set gross_cost and net_cost to the negative of the matched cost
+            # This represents the "disposition cost" for position tracking
+            transaction.gross_cost = -total_matched_cost
+            transaction.net_cost = -total_matched_cost
         else:
             transaction.realized_gain_loss = Decimal(0) # If no quantity matched (e.g., 0 quantity sell)
+            transaction.gross_cost = Decimal(0) # No cost matched, so 0
+            transaction.net_cost = Decimal(0)   # No cost matched, so 0
+
 
         # For SELLs, average_price might represent the average sell price or average matched buy price.
         # Let's set it to average sell price for now.
@@ -161,7 +168,7 @@ class CostCalculator:
         self._error_reporter = error_reporter
         self._strategies: dict[TransactionType, TransactionCostStrategy] = {
             TransactionType.BUY: BuyStrategy(),
-            TransactionType.SELL: SellStrategy(), # Removed duplicate BUY entry
+            TransactionType.SELL: SellStrategy(),
             TransactionType.INTEREST: DefaultStrategy(),
             TransactionType.DIVIDEND: DefaultStrategy(),
             TransactionType.DEPOSIT: DefaultStrategy(),
