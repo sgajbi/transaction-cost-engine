@@ -1,6 +1,7 @@
 # src/services/transaction_processor.py
 
-from typing import Tuple
+import logging # Added
+from typing import Tuple, List, Any # Added Any for generic dict type in logs, and List
 from src.core.models.transaction import Transaction
 from src.core.models.response import ErroredTransaction
 from src.logic.parser import TransactionParser
@@ -8,6 +9,8 @@ from src.logic.sorter import TransactionSorter
 from src.logic.disposition_engine import DispositionEngine
 from src.logic.cost_calculator import CostCalculator
 from src.logic.error_reporter import ErrorReporter
+
+logger = logging.getLogger(__name__) # Added
 
 class TransactionProcessor:
     """
@@ -31,8 +34,8 @@ class TransactionProcessor:
 
     def process_transactions(
         self,
-        existing_transactions_raw: list[dict],
-        new_transactions_raw: list[dict]
+        existing_transactions_raw: list[dict[str, Any]], # Added [str, Any] for more specific dict type hint
+        new_transactions_raw: list[dict[str, Any]] # Added [str, Any] for more specific dict type hint
     ) -> Tuple[list[Transaction], list[ErroredTransaction]]:
         """
         Main method to process both existing and new financial transactions.
@@ -46,6 +49,19 @@ class TransactionProcessor:
             - List of successfully processed Transaction objects with calculated costs.
             - List of ErroredTransaction objects for any failures.
         """
+        logger.info(f"TransactionProcessor: Type of existing_transactions_raw received: {type(existing_transactions_raw)}") # Added
+        if existing_transactions_raw: # Added
+            logger.info(f"TransactionProcessor: Type of first item in existing_transactions_raw: {type(existing_transactions_raw[0])}") # Added
+        else: # Added
+            logger.info("TransactionProcessor: existing_transactions_raw list is empty or None.") # Added
+
+        logger.info(f"TransactionProcessor: Type of new_transactions_raw received: {type(new_transactions_raw)}") # Added
+        if new_transactions_raw: # Added
+            logger.info(f"TransactionProcessor: Type of first item in new_transactions_raw: {type(new_transactions_raw[0])}") # Added
+        else: # Added
+            logger.info("TransactionProcessor: new_transactions_raw list is empty or None.") # Added
+
+
         # Step 1: Parse all raw transactions (existing and new)
         # We need to parse existing transactions first to initialize the disposition engine.
         # It's important that these are valid if they are truly 'existing_transactions'

@@ -1,5 +1,6 @@
 # src/api/v1/transactions.py
 
+import logging 
 from fastapi import APIRouter, Depends, HTTPException, status
 from src.core.models.request import TransactionProcessingRequest
 from src.core.models.response import TransactionProcessingResponse
@@ -9,6 +10,8 @@ from src.logic.sorter import TransactionSorter
 from src.logic.disposition_engine import DispositionEngine
 from src.logic.cost_calculator import CostCalculator
 from src.logic.error_reporter import ErrorReporter
+
+logger = logging.getLogger(__name__) 
 
 router = APIRouter()
 
@@ -48,11 +51,30 @@ async def process_transactions_endpoint(
     """
     API endpoint to process financial transactions.
     """
-    processed, errored = processor.process_transactions(
-        existing_transactions_raw=request.existing_transactions,
-        new_transactions_raw=request.new_transactions
-    )
-    return TransactionProcessingResponse(
-        processed_transactions=processed,
-        errored_transactions=errored
-    )   
+    logger.info(f"API Endpoint: Type of request.existing_transactions: {type(request.existing_transactions)}") 
+    if request.existing_transactions: 
+        logger.info(f"API Endpoint: Type of first item in request.existing_transactions: {type(request.existing_transactions[0])}") 
+    else: 
+        logger.info("API Endpoint: existing_transactions list is empty or None.") 
+
+    logger.info(f"API Endpoint: Type of request.new_transactions: {type(request.new_transactions)}") 
+    if request.new_transactions: 
+        logger.info(f"API Endpoint: Type of first item in request.new_transactions: {type(request.new_transactions[0])}") 
+    else: 
+        logger.info("API Endpoint: new_transactions list is empty or None.") 
+
+    try:   
+        processed, errored = processor.process_transactions(
+            existing_transactions_raw=request.existing_transactions,
+            new_transactions_raw=request.new_transactions
+        )
+        return TransactionProcessingResponse(
+            processed_transactions=processed,
+            errored_transactions=errored
+        )
+    except Exception as e:  
+        logger.exception("API Endpoint: An unhandled error occurred during transaction processing.") 
+        raise HTTPException( 
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"An unexpected error occurred: {str(e)}" 
+        )
