@@ -1,6 +1,6 @@
 # src/logic/parser.py
 
-from typing import List, Dict, Any, Tuple
+from typing import Dict, Any, Tuple
 from pydantic import ValidationError, TypeAdapter
 from src.core.models.transaction import Transaction
 from src.core.models.response import ErroredTransaction
@@ -18,8 +18,9 @@ class TransactionParser:
         self._transaction_list_adapter = TypeAdapter(List[Transaction])
 
     def parse_transactions(
-        self, raw_transactions: List[Dict[str, Any]]
-    ) -> Tuple[List[Transaction], List[ErroredTransaction]]:
+         self, raw_transactions: list[dict[str, Any]]
+    ) -> Tuple[list[Transaction], list[ErroredTransaction]]:
+      
         """
         Parses a list of raw transaction dictionaries into Transaction Pydantic models.
         Separates valid transactions from errored ones.
@@ -32,8 +33,8 @@ class TransactionParser:
             - A list of successfully parsed Transaction objects.
             - A list of ErroredTransaction objects for transactions that failed parsing.
         """
-        parsed_transactions: List[Transaction] = []
-        errored_transactions: List[ErroredTransaction] = []
+        parsed_transactions: list[Transaction] = []
+        errored_transactions: list[ErroredTransaction] = []
 
         for raw_txn in raw_transactions:
             transaction_id = raw_txn.get("transaction_id", "UNKNOWN_ID")

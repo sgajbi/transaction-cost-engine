@@ -1,6 +1,5 @@
 # src/logic/sorter.py
 
-from typing import List
 from src.core.models.transaction import Transaction
 
 class TransactionSorter:
@@ -11,9 +10,9 @@ class TransactionSorter:
 
     def sort_transactions(
         self,
-        existing_transactions: List[Transaction],
-        new_transactions: List[Transaction]
-    ) -> List[Transaction]:
+        existing_transactions: list[Transaction],
+        new_transactions: list[Transaction]
+    ) -> list[Transaction]:
         """
         Merges existing and new transactions and sorts them.
 

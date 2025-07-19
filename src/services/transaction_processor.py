@@ -1,6 +1,6 @@
 # src/services/transaction_processor.py
 
-from typing import List, Tuple
+from typing import Tuple
 from src.core.models.transaction import Transaction
 from src.core.models.response import ErroredTransaction
 from src.logic.parser import TransactionParser
@@ -31,9 +31,9 @@ class TransactionProcessor:
 
     def process_transactions(
         self,
-        existing_transactions_raw: List[dict],
-        new_transactions_raw: List[dict]
-    ) -> Tuple[List[Transaction], List[ErroredTransaction]]:
+        existing_transactions_raw: list[dict],
+        new_transactions_raw: list[dict]
+    ) -> Tuple[list[Transaction], list[ErroredTransaction]]:
         """
         Main method to process both existing and new financial transactions.
 

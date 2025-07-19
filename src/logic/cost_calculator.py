@@ -1,6 +1,6 @@
 # src/logic/cost_calculator.py
 
-from typing import Dict, Type, Protocol
+from typing import Protocol
 from decimal import Decimal, getcontext
 
 from src.core.models.transaction import Transaction
@@ -150,6 +150,7 @@ class CostCalculator:
     """
     Applies the appropriate cost calculation strategy based on transaction type.
     """
+
     def __init__(
         self,
         disposition_engine: DispositionEngine,
@@ -157,7 +158,8 @@ class CostCalculator:
     ):
         self._disposition_engine = disposition_engine
         self._error_reporter = error_reporter
-        self._strategies: Dict[TransactionType, TransactionCostStrategy] = {
+        self._strategies: dict[TransactionType, TransactionCostStrategy] = {
+            TransactionType.BUY: BuyStrategy(),
             TransactionType.BUY: BuyStrategy(),
             TransactionType.SELL: SellStrategy(),
             TransactionType.INTEREST: DefaultStrategy(),

@@ -1,10 +1,8 @@
 # src/logic/disposition_engine.py
 
 from collections import defaultdict, deque
-from typing import Dict, Deque, Optional, Tuple
+from typing import Deque, Optional, Tuple # Removed Dict, List as we use built-in generics
 from decimal import Decimal, getcontext # Use Decimal for precise financial calculations
-
-from src.core.models.transaction import Transaction
 
 # Set precision for Decimal calculations (e.g., 10 decimal places)
 getcontext().prec = 10
@@ -36,7 +34,7 @@ class DispositionEngine:
     """
     def __init__(self):
         # Stores cost lots: { (portfolio_id, instrument_id): Deque[CostLot] }
-        self._open_lots: Dict[Tuple[str, str], Deque[CostLot]] = defaultdict(deque)
+        self._open_lots: dict[tuple[str, str], deque[CostLot]] = defaultdict(deque) # Changed Dict and Tuple to dict and tuple
 
     def add_buy_lot(self, transaction: Transaction):
         """
@@ -78,7 +76,7 @@ class DispositionEngine:
 
     def consume_sell_quantity_fifo(
         self, transaction: Transaction
-    ) -> Tuple[Decimal, Decimal, Optional[str]]:
+    ) -> Tuple[Decimal, Decimal, Optional[str]]: # Tuple is from typing, so it's fine
         """
         Consumes quantity from open lots using FIFO method for a SELL transaction.
         Calculates the total matched cost and returns it along with consumed quantity.
@@ -129,18 +127,15 @@ class DispositionEngine:
 
         return total_matched_cost, consumed_quantity, None
 
-    def get_all_open_lots(self) -> Dict[Tuple[str, str], Deque[CostLot]]:
+    def get_all_open_lots(self) -> dict[tuple[str, str], deque[CostLot]]: # Changed Dict and Tuple to dict and tuple
         """For debugging or testing: returns the current state of all open lots."""
         return self._open_lots
 
-    def set_initial_lots(self, transactions: List[Transaction]):
+    def set_initial_lots(self, transactions: list[Transaction]): # Changed List to list
         """
         Initializes the disposition engine with existing BUY transactions.
         This is crucial for processing new SELLs against existing holdings.
         """
-        # Ensure that this method is called only once at the beginning of processing for a request
-        # Or that _open_lots is reset for each request processing if this is part of the service.
-        # For our stateless API, a new engine instance will be created per request.
         for txn in transactions:
             if txn.transaction_type == TransactionType.BUY.value:
                 self.add_buy_lot(txn)

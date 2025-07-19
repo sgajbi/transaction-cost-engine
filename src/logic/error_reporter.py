@@ -1,16 +1,17 @@
 # src/logic/error_reporter.py
 
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
 from src.core.models.response import ErroredTransaction
 
 class ErrorReporter:
     """
     Manages the collection and reporting of processing errors for transactions.
     """
-    def __init__(self):
-        self._errored_transactions: Dict[str, ErroredTransaction] = {}
 
-    def add_error(self, transaction_id: str, error_reason: str):
+    def __init__(self):
+        self._errored_transactions: dict[str, ErroredTransaction] = {} 
+   
+    def get_errors(self) -> list[ErroredTransaction]:
         """
         Adds an error for a specific transaction. If an error for the same
         transaction ID already exists, it updates the reason or appends to it.
