@@ -15,7 +15,7 @@ class TransactionType(str, Enum):
     DEPOSIT = "DEPOSIT"
     WITHDRAWAL = "WITHDRAWAL"
     FEE = "FEE"
-    Other = "OTHER" # Catch-all for any other transaction types not explicitly defined
+    OTHER = "OTHER" # Catch-all for any other transaction types not explicitly defined
 
     @classmethod
     def list(cls):
