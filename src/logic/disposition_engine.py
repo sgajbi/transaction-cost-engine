@@ -1,15 +1,19 @@
 # src/logic/disposition_engine.py
 
-# src/logic/disposition_engine.py
-
 from collections import defaultdict, deque
 from typing import Deque, Optional, Tuple, Dict
-from decimal import Decimal # Removed 'getcontext' import as it's no longer used here
+from decimal import Decimal
 from src.core.models.transaction import Transaction
 from src.core.enums.transaction_type import TransactionType
 from src.logic.cost_basis_strategies import CostBasisStrategy, FIFOBasisStrategy, AverageCostBasisStrategy
 from src.logic.cost_objects import CostLot
 
+# REMOVED: Set precision for Decimal calculations (e.g., 10 decimal places)
+# REMOVED: getcontext().prec = 10 # This is now handled in main.py
+
+# The CostLot class itself is now in src/logic/cost_objects.py
+# class CostLot:
+#     ...
 
 class DispositionEngine:
     """
@@ -22,7 +26,10 @@ class DispositionEngine:
     def add_buy_lot(self, transaction: Transaction):
         """
         Delegates adding a new BUY transaction to the active cost basis strategy.
+        Prevents adding lots with zero quantity.
         """
+        if transaction.quantity == Decimal(0): # NEW CHECK
+            return
         self._cost_basis_strategy.add_buy_lot(transaction)
 
     def get_available_quantity(self, portfolio_id: str, instrument_id: str) -> Decimal:
@@ -47,7 +54,11 @@ class DispositionEngine:
         Delegates initializing the disposition engine with existing BUY transactions
         to the active cost basis strategy.
         """
-        self._cost_basis_strategy.set_initial_lots(transactions)
+        # Note: The underlying strategies' add_buy_lot methods should handle zero quantity
+        # or it should be handled here before delegation. Handled here.
+        self._cost_basis_strategy.set_initial_lots([
+            txn for txn in transactions if txn.transaction_type == TransactionType.BUY and txn.quantity > Decimal(0) # Filter zero quantity buys here too
+        ])
 
     def get_all_open_lots(self) -> Dict[Tuple[str, str], Deque[CostLot]]:
         """
