@@ -8,6 +8,8 @@ from src.core.enums.transaction_type import TransactionType
 from src.logic.disposition_engine import DispositionEngine
 from src.logic.error_reporter import ErrorReporter
 
+# REMOVED: getcontext().prec = 10 (now in main.py)
+
 class TransactionCostStrategy(Protocol):
     """
     Protocol (interface) for transaction cost calculation strategies.
@@ -36,33 +38,30 @@ class BuyStrategy:
     ) -> None:
         """
         Calculates Net Cost and Gross Cost for a BUY transaction.
-        Also adds the lot to the disposition engine.
+        Also adds the lot to the disposition engine (if quantity > 0).
         """
         # Gross = gross_transaction_amount (as provided)
         transaction.gross_cost = Decimal(str(transaction.gross_transaction_amount))
 
         # Net = gross + fees + accrued_interest
-        # transaction.fees.total_fees will now correctly return Decimal
         total_fees = transaction.fees.total_fees if transaction.fees else Decimal(0)
         accrued_interest = Decimal(str(transaction.accrued_interest)) if transaction.accrued_interest is not None else Decimal(0)
 
         transaction.net_cost = transaction.gross_cost + total_fees + accrued_interest
 
-        # For BUYs, average_price can be updated or calculated, depending on your business rule.
-        # Here, we'll set it to the effective cost per share if not already provided.
         if transaction.quantity > 0:
             calculated_average_price = transaction.net_cost / Decimal(str(transaction.quantity))
             if transaction.average_price is None:
                 transaction.average_price = calculated_average_price
-            # If provided average_price is significantly different, you might log a warning or flag.
         else:
-            transaction.average_price = Decimal(0) # Or None, based on desired behavior for 0 quantity buys
+            transaction.average_price = Decimal(0)
 
-        # Add the buy transaction as an open lot for future sells
-        try:
-            disposition_engine.add_buy_lot(transaction)
-        except ValueError as e:
-            error_reporter.add_error(transaction.transaction_id, str(e))
+        # Only add the buy transaction as an open lot if quantity is greater than zero
+        if transaction.quantity > Decimal(0): # FIX: Add quantity check before calling add_buy_lot
+            try:
+                disposition_engine.add_buy_lot(transaction)
+            except ValueError as e:
+                error_reporter.add_error(transaction.transaction_id, str(e))
 
 
 class SellStrategy:
@@ -85,31 +84,21 @@ class SellStrategy:
             disposition_engine.consume_sell_quantity(transaction)
 
         if error_reason:
-            # If disposition engine reports an error (e.g., insufficient quantity)
             error_reporter.add_error(transaction.transaction_id, error_reason)
-            transaction.realized_gain_loss = None # Or Decimal(0), based on desired behavior for errored sells
-            # REMOVED: transaction.error_reason = error_reason # This is now handled by TransactionProcessor checking ErrorReporter
-            # Even if errored, we can still set the costs to 0 or None if that's desired for errored sells
+            transaction.realized_gain_loss = None
             transaction.gross_cost = Decimal(0)
             transaction.net_cost = Decimal(0)
             return
 
-        # Realized Gain/Loss = sell proceeds - matched buy cost
-        # Only calculate if a valid quantity was consumed
         if consumed_quantity > 0:
             transaction.realized_gain_loss = sell_proceeds - total_matched_cost
-            # Set gross_cost and net_cost to the negative of the matched cost
-            # This represents the "disposition cost" for position tracking
             transaction.gross_cost = -total_matched_cost
             transaction.net_cost = -total_matched_cost
         else:
-            transaction.realized_gain_loss = Decimal(0) # If no quantity matched (e.g., 0 quantity sell)
-            transaction.gross_cost = Decimal(0) # No cost matched, so 0
-            transaction.net_cost = Decimal(0)   # No cost matched, so 0
+            transaction.realized_gain_loss = Decimal(0)
+            transaction.gross_cost = Decimal(0)
+            transaction.net_cost = Decimal(0)
 
-
-        # For SELLs, average_price might represent the average sell price or average matched buy price.
-        # Let's set it to average sell price for now.
         if sell_quantity > 0:
             transaction.average_price = sell_proceeds / sell_quantity
         else:
@@ -124,26 +113,21 @@ class DefaultStrategy:
     def calculate_costs(
         self,
         transaction: Transaction,
-        disposition_engine: DispositionEngine, # Not used for these types, but interface requires it
-        error_reporter: ErrorReporter # Not typically used for simple calculations, but interface requires it
+        disposition_engine: DispositionEngine,
+        error_reporter: ErrorReporter
     ) -> None:
         """
         Sets gross_cost and net_cost based on transaction amounts.
         Realized gain/loss is not applicable.
         """
-        # For simplicity, for these types, gross_cost and net_cost might just reflect
-        # the transaction amount itself or zero if not applicable.
-        # Adjust this logic based on exact business rules for each type.
-        # Assuming for now they represent the amount of value itself.
         transaction.gross_cost = Decimal(str(transaction.gross_transaction_amount))
-        # Use provided net_transaction_amount if available, otherwise default to gross
         if transaction.net_transaction_amount is not None:
             transaction.net_cost = Decimal(str(transaction.net_transaction_amount))
         else:
-            transaction.net_cost = transaction.gross_cost # Default if net not provided
+            transaction.net_cost = transaction.gross_cost
 
-        transaction.realized_gain_loss = None # Not applicable for these types
-        transaction.average_price = None # Not applicable for these types
+        transaction.realized_gain_loss = None
+        transaction.average_price = None
 
 
 class CostCalculator:
@@ -167,9 +151,8 @@ class CostCalculator:
             TransactionType.WITHDRAWAL: DefaultStrategy(),
             TransactionType.FEE: DefaultStrategy(),
             TransactionType.OTHER: DefaultStrategy(),
-            # Add other specific strategies here as needed
         }
-        self._default_strategy = DefaultStrategy() # Fallback for unknown types (though enum should prevent)
+        self._default_strategy = DefaultStrategy()
 
     def calculate_transaction_costs(self, transaction: Transaction):
         """
@@ -177,15 +160,12 @@ class CostCalculator:
         """
         transaction_type_enum: Optional[TransactionType] = None
         try:
-            # Convert string transaction type to enum for lookup
             transaction_type_enum = TransactionType(transaction.transaction_type)
         except ValueError:
-            # This should ideally be caught by TransactionParser, but as a safeguard:
             self._error_reporter.add_error(
                 transaction.transaction_id,
                 f"Unknown transaction type '{transaction.transaction_type}'. Cannot calculate costs."
             )
-            # REMOVED: transaction.error_reason = f"Unknown transaction type '{transaction.transaction_type}'."
             return
 
         strategy = self._strategies.get(transaction_type_enum, self._default_strategy)
