@@ -281,9 +281,11 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
         # Matched cost for 12 shares = 12 * (4115.0 / 35) = 1416.857142857...
         # Gain/Loss = 1500 (gross proceeds) - 1416.857142857 (matched cost) - 3.0 (sell fees) = 80.142857143...
         expected_avco_gain_loss_ns1 = Decimal("1500") - (Decimal("12") * (Decimal("4115.0") / Decimal("35"))) - Decimal("3.0")
-        assert n_s1_processed.realized_gain_loss == expected_avco_gain_loss_ns1.quantize(Decimal('0.01'))
+        # FIX: Quantize the actual value from the processed map before comparison
+        assert n_s1_processed.realized_gain_loss.quantize(Decimal('0.01')) == expected_avco_gain_loss_ns1.quantize(Decimal('0.01'))
         expected_avco_gross_cost_ns1 = -(Decimal("12") * (Decimal("4115.0") / Decimal("35")))
-        assert n_s1_processed.gross_cost == expected_avco_gross_cost_ns1.quantize(Decimal('0.01'))
+        # FIX: Quantize the actual value from the processed map before comparison
+        assert n_s1_processed.gross_cost.quantize(Decimal('0.01')) == expected_avco_gross_cost_ns1.quantize(Decimal('0.01'))
     
     # Verify N_S2 (Sell 20 shares)
     n_s2_processed = processed_map["N_S2"]
@@ -329,5 +331,7 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
         expected_avco_matched_cost_ns2 = Decimal(20) * (after_nb4_cost / after_nb4_qty)
         expected_avco_gain_loss_ns2 = Decimal("2200") - expected_avco_matched_cost_ns2 - Decimal("3.0")
 
-        assert n_s2_processed.realized_gain_loss == expected_avco_gain_loss_ns2.quantize(Decimal('0.01'))
-        assert n_s2_processed.gross_cost == -expected_avco_matched_cost_ns2.quantize(Decimal('0.01'))
+        # FIX: Quantize the actual value from the processed map before comparison
+        assert n_s2_processed.realized_gain_loss.quantize(Decimal('0.01')) == expected_avco_gain_loss_ns2.quantize(Decimal('0.01'))
+        # FIX: Quantize the actual value from the processed map before comparison
+        assert n_s2_processed.gross_cost.quantize(Decimal('0.01')) == (-expected_avco_matched_cost_ns2).quantize(Decimal('0.01'))
