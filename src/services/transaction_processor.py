@@ -26,11 +26,12 @@ class TransactionProcessor:
         error_reporter: ErrorReporter
     ):
         # Dependency Injection: All core logic components are injected
-        self._parser = parser
+        # MODIFIED: Pass error_reporter to TransactionParser
+        self._parser = TransactionParser(error_reporter=error_reporter) # Pass the error reporter
         self._sorter = sorter
         self._disposition_engine = disposition_engine
         self._cost_calculator = cost_calculator
-        self._error_reporter = error_reporter
+        self._error_reporter = error_reporter # Keep storing it here for overall orchestration
 
     def process_transactions(
         self,
@@ -46,11 +47,13 @@ class TransactionProcessor:
         logger.info(f"Starting transaction processing. Existing: {len(existing_transactions_raw)}, New: {len(new_transactions_raw)}")
 
         # 1. Parse existing transactions
+        # MODIFIED: Pass error_reporter to parser (already done in __init__ for the instance)
         parsed_existing_transactions, existing_parsing_errors = self._parser.parse_transactions(existing_transactions_raw)
         all_errored_transactions.extend(existing_parsing_errors)
         logger.debug(f"Parsed {len(parsed_existing_transactions)} existing transactions with {len(existing_parsing_errors)} errors.")
 
         # 2. Parse new transactions
+        # MODIFIED: Pass error_reporter to parser (already done in __init__ for the instance)
         parsed_new_transactions, new_parsing_errors = self._parser.parse_transactions(new_transactions_raw)
         all_errored_transactions.extend(new_parsing_errors)
         logger.debug(f"Parsed {len(parsed_new_transactions)} new transactions with {len(new_parsing_errors)} errors.")
@@ -59,12 +62,11 @@ class TransactionProcessor:
         new_transaction_ids = {txn.transaction_id for txn in parsed_new_transactions}
 
         # Filter out transactions that already have a parsing error before sorting and processing
+        # This currently relies on txn.error_reason being set by the parser. This will need adjustment in the next step.
         sortable_existing_transactions = [txn for txn in parsed_existing_transactions if not txn.error_reason]
         sortable_new_transactions = [txn for txn in parsed_new_transactions if not txn.error_reason]
 
         # 3. Sort all transactions chronologically (delegating merging and sorting to sorter)
-        # The sorter is expected to handle combining existing and new transactions
-        # and returning a single sorted list.
         sorted_transactions = self._sorter.sort_transactions(
             existing_transactions=sortable_existing_transactions,
             new_transactions=sortable_new_transactions
@@ -72,8 +74,6 @@ class TransactionProcessor:
         logger.debug(f"Sorted {len(sorted_transactions)} transactions (combined existing and new).")
 
         # 4. Initialize disposition engine with existing, successfully parsed BUY transactions
-        # This is crucial for correct cost basis calculation for sells.
-        # The set_initial_lots method in DispositionEngine (and its strategies) already filters for BUYs.
         self._disposition_engine.set_initial_lots(sortable_existing_transactions)
         logger.debug(f"Disposition engine initialized with existing BUY lots.")
 
@@ -82,8 +82,7 @@ class TransactionProcessor:
         # 5. Process all sorted transactions
         for transaction in sorted_transactions:
             # If a transaction already has an error (e.g., from initial parsing), ensure it's reported and skip.
-            # This handles cases where transactions might have been passed to sorter even if errored,
-            # though current filtering to `sortable_existing/new_transactions` should prevent this.
+            # This check will need refinement once parser always uses ErrorReporter.
             if transaction.error_reason:
                 self._error_reporter.add_error(transaction.transaction_id, transaction.error_reason)
                 continue
@@ -96,7 +95,8 @@ class TransactionProcessor:
                     self._cost_calculator.calculate_transaction_costs(transaction)
 
                     # After cost calculation, check if any new error was added to the transaction
-                    if transaction.error_reason:
+                    # This also needs to be refined, potentially checking error_reporter directly.
+                    if transaction.error_reason: # This check relies on error_reason being set elsewhere (e.g., by parser)
                         self._error_reporter.add_error(transaction.transaction_id, transaction.error_reason)
                     else:
                         processed_transactions.append(transaction)
@@ -106,10 +106,6 @@ class TransactionProcessor:
                     transaction.error_reason = f"Unexpected processing error: {type(e).__name__}: {str(e)}"
                     self._error_reporter.add_error(transaction.transaction_id, transaction.error_reason)
             else:
-                # For existing transactions, if they are not errored, they are implicitly "processed" by
-                # contributing to the initial state of the disposition engine.
-                # We do not add them to processed_transactions output as per problem statement
-                # which asks for processed *new* transactions.
                 pass
 
 
@@ -117,9 +113,6 @@ class TransactionProcessor:
         final_errored_transactions = self._error_reporter.get_errors()
 
         # 7. Filter processed transactions to return only those corresponding to the *new* input transactions
-        # This ensures the API response matches the expected output for new transactions.
-        # The 'processed_transactions' list already only contains new transactions due to the fix above,
-        # but this re-confirms for clarity and robustness.
         final_processed_new_transactions = [
             txn for txn in processed_transactions
             if txn.transaction_id in new_transaction_ids
