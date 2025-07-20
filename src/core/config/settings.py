@@ -20,8 +20,7 @@ class Settings(BaseSettings): # Renamed AppSettings to Settings
     # Logging Settings
     LOG_LEVEL: str = "INFO" # e.g., DEBUG, INFO, WARNING, ERROR, CRITICAL
 
-    # Cost Calculation Settings (Moved from src/core/config.py)
-    COST_BASIS_METHOD: CostMethod = CostMethod.FIFO # Added from original src/core/config.py
+    COST_BASIS_METHOD: CostMethod = CostMethod.FIFO
 
     # Pydantic-settings configuration
     model_config = SettingsConfigDict(
