@@ -1,15 +1,12 @@
 # src/logic/cost_calculator.py
 
 from typing import Protocol, Optional
-from decimal import Decimal, getcontext
+from decimal import Decimal
 
 from src.core.models.transaction import Transaction
 from src.core.enums.transaction_type import TransactionType
 from src.logic.disposition_engine import DispositionEngine
 from src.logic.error_reporter import ErrorReporter
-
-# Set precision for Decimal calculations (e.g., 10 decimal places)
-getcontext().prec = 10
 
 class TransactionCostStrategy(Protocol):
     """

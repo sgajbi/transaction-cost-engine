@@ -2,9 +2,9 @@
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
-from src.core.enums.cost_method import CostMethod # Import CostMethod enum
+from src.core.enums.cost_method import CostMethod
 
-class Settings(BaseSettings): # Renamed AppSettings to Settings
+class Settings(BaseSettings):
     """
     Application settings loaded from environment variables or .env file.
     Includes general app settings and cost basis method configuration.
@@ -20,7 +20,9 @@ class Settings(BaseSettings): # Renamed AppSettings to Settings
     # Logging Settings
     LOG_LEVEL: str = "INFO" # e.g., DEBUG, INFO, WARNING, ERROR, CRITICAL
 
+    # Cost Calculation Settings
     COST_BASIS_METHOD: CostMethod = CostMethod.FIFO
+    DECIMAL_PRECISION: int = 10 # NEW: Centralized Decimal precision setting
 
     # Pydantic-settings configuration
     model_config = SettingsConfigDict(
@@ -30,4 +32,4 @@ class Settings(BaseSettings): # Renamed AppSettings to Settings
         extra='ignore' # Ignore extra environment variables not defined in the model
     )
 
-settings = Settings() # Instantiated the new combined Settings class
+settings = Settings()

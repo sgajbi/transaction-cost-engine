@@ -1,9 +1,7 @@
 # src/logic/cost_objects.py
 
-from decimal import Decimal, getcontext
+from decimal import Decimal
 
-# Set precision for Decimal calculations (e.g., 10 decimal places)
-getcontext().prec = 10
 
 class CostLot:
     """Represents a single 'lot' of securities acquired through a BUY transaction."""

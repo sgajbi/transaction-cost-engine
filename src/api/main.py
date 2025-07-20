@@ -4,14 +4,17 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 import uvicorn
 import logging
+from decimal import getcontext # NEW: Import getcontext for precision setting
 
-# NEW: Import the consolidated v1 router
-from src.api.v1.router import router as v1_router # Corrected import for v1 router
+from src.api.v1.router import router as v1_router
 from src.core.config.settings import settings # Import our application settings
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(settings.APP_NAME)
+
+# Set global Decimal precision at application startup
+getcontext().prec = settings.DECIMAL_PRECISION # NEW: Apply precision from settings
 
 # Create FastAPI app instance
 app = FastAPI(
@@ -22,8 +25,7 @@ app = FastAPI(
 )
 
 # Include API routers
-# OLD: app.include_router(transactions.router, prefix=settings.API_V1_STR, tags=["Transactions"])
-app.include_router(v1_router, prefix=settings.API_V1_STR) # NEW: Include the consolidated v1 router without redundant tags
+app.include_router(v1_router, prefix=settings.API_V1_STR)
 
 @app.get("/", include_in_schema=False)
 async def root():

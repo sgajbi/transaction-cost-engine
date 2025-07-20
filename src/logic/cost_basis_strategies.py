@@ -1,34 +1,13 @@
 # src/logic/cost_basis_strategies.py
-import logging 
+import logging
 from typing import Protocol, Deque, Dict, Tuple, Optional
 from collections import deque, defaultdict
-from decimal import Decimal, getcontext
+from decimal import Decimal     
 
-from src.core.models.transaction import Transaction # Import Transaction for type hinting
+from src.core.models.transaction import Transaction
+from src.logic.cost_objects import CostLot
 
-# Set precision for Decimal calculations (e.g., 10 decimal places)
-getcontext().prec = 10
-
-logger = logging.getLogger(__name__) # Add this line
-
-class CostLot:
-    """Represents a single 'lot' of securities acquired through a BUY transaction."""
-    def __init__(self, transaction_id: str, quantity: Decimal, cost_per_share: Decimal):
-        self.transaction_id = transaction_id
-        self.original_quantity = quantity
-        self.remaining_quantity = quantity
-        self.cost_per_share = cost_per_share
-
-    @property
-    def total_cost(self) -> Decimal:
-        """Calculates the total cost of the original lot."""
-        return self.original_quantity * self.cost_per_share
-
-    def __repr__(self) -> str:
-        return (f"CostLot(txn_id='{self.transaction_id}', "
-                f"original_qty={self.original_quantity:.2f}, "
-                f"remaining_qty={self.remaining_quantity:.2f}, "
-                f"cost_per_share={self.cost_per_share:.4f})")
+logger = logging.getLogger(__name__) 
 
 # --- Cost Basis Strategy Protocol ---
 
@@ -47,7 +26,6 @@ class CostBasisStrategy(Protocol):
     ) -> Tuple[Decimal, Decimal, Optional[str]]:
         """
         Consumes quantity for a sell transaction based on the specific cost basis method.
-
         Returns:
             A tuple: (total_matched_cost, consumed_quantity, error_reason)
         """
@@ -183,14 +161,14 @@ class AverageCostBasisStrategy(CostBasisStrategy):
         buy_quantity = Decimal(str(transaction.quantity))
         buy_net_cost = Decimal(str(transaction.net_cost)) # Use net_cost for cost basis
 
-        logger.debug(f"Before BUY: Holdings for {key}: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}") # Add debug log
-        logger.debug(f"Processing BUY {transaction.transaction_id}: quantity={buy_quantity:.2f}, net_cost={buy_net_cost:.2f}") # Add debug log
+        logger.debug(f"Before BUY: Holdings for {key}: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}")
+        logger.debug(f"Processing BUY {transaction.transaction_id}: quantity={buy_quantity:.2f}, net_cost={buy_net_cost:.2f}")
 
 
         self._holdings[key]['total_qty'] += buy_quantity
         self._holdings[key]['total_cost'] += buy_net_cost
 
-        logger.debug(f"After BUY: Holdings for {key}: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}") # Add debug log
+        logger.debug(f"After BUY: Holdings for {key}: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}")
 
 
     def consume_sell_quantity(self, portfolio_id: str, instrument_id: str, required_quantity: Decimal) -> Tuple[Decimal, Decimal, Optional[str]]:
@@ -200,11 +178,11 @@ class AverageCostBasisStrategy(CostBasisStrategy):
         key = (portfolio_id, instrument_id)
         total_qty = self._holdings[key]['total_qty']
         total_cost = self._holdings[key]['total_cost']
-        logger.debug(f"Processing SELL for {key}: required_quantity={required_quantity:.2f}") # Add debug log
-        logger.debug(f"Current holdings for SELL: total_qty={total_qty:.2f}, total_cost={total_cost:.2f}") # Add debug log
+        logger.debug(f"Processing SELL for {key}: required_quantity={required_quantity:.2f}")
+        logger.debug(f"Current holdings for SELL: total_qty={total_qty:.2f}, total_cost={total_cost:.2f}")
 
         if required_quantity > total_qty:
-            logger.warning(f"Sell quantity ({required_quantity:.2f}) exceeds available average cost holdings ({total_qty:.2f}) for instrument '{key[1]}' in portfolio '{key[0]}'.") # Add debug log
+            logger.warning(f"Sell quantity ({required_quantity:.2f}) exceeds available average cost holdings ({total_qty:.2f}) for instrument '{key[1]}' in portfolio '{key[0]}'.")
             return (
                 Decimal(0),
                 Decimal(0),
@@ -229,7 +207,7 @@ class AverageCostBasisStrategy(CostBasisStrategy):
         # Update holdings after sale
         self._holdings[key]['total_qty'] -= consumed_quantity
         self._holdings[key]['total_cost'] -= matched_cost # Deduct the cost basis of the sold shares
-        logger.debug(f"After SELL: Holdings for {key}: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}") # Add debug log
+        logger.debug(f"After SELL: Holdings for {key}: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}")
 
         return matched_cost, consumed_quantity, None
 
@@ -244,7 +222,7 @@ class AverageCostBasisStrategy(CostBasisStrategy):
         """
         Initializes the Average Cost strategy with existing BUY transactions.
         """
-        logger.debug("Setting initial lots for AverageCostBasisStrategy...") # Add debug log
+        logger.debug("Setting initial lots for AverageCostBasisStrategy...")
 
         for txn in transactions:
             if txn.transaction_type == "BUY": # Use string literal for consistency with Pydantic model
@@ -252,4 +230,4 @@ class AverageCostBasisStrategy(CostBasisStrategy):
                 key = (txn.portfolio_id, txn.instrument_id)
                 self._holdings[key]['total_qty'] += Decimal(str(txn.quantity)) # Ensure Decimal from string repr
                 self._holdings[key]['total_cost'] += Decimal(str(txn.net_cost)) # Ensure Decimal from string repr
-                logger.debug(f"Initial BUY added: Txn ID={txn.transaction_id}, quantity={txn.quantity:.2f}, net_cost={txn.net_cost:.2f}. Current holdings: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}") # Add debug log
+                logger.debug(f"Initial BUY added: Txn ID={txn.transaction_id}, quantity={txn.quantity:.2f}, net_cost={txn.net_cost:.2f}. Current holdings: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}")

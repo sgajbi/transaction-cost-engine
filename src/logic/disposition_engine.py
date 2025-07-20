@@ -1,15 +1,15 @@
 # src/logic/disposition_engine.py
 
+# src/logic/disposition_engine.py
+
 from collections import defaultdict, deque
 from typing import Deque, Optional, Tuple, Dict
-from decimal import Decimal, getcontext
+from decimal import Decimal # Removed 'getcontext' import as it's no longer used here
 from src.core.models.transaction import Transaction
 from src.core.enums.transaction_type import TransactionType
 from src.logic.cost_basis_strategies import CostBasisStrategy, FIFOBasisStrategy, AverageCostBasisStrategy
-from src.logic.cost_objects import CostLot # NEW: Import CostLot from centralized location
+from src.logic.cost_objects import CostLot
 
-# Set precision for Decimal calculations (e.g., 10 decimal places)
-getcontext().prec = 10
 
 class DispositionEngine:
     """
