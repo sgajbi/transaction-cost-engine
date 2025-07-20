@@ -4,17 +4,27 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 import uvicorn
 import logging
-from decimal import getcontext # NEW: Import getcontext for precision setting
+from decimal import Decimal, getcontext # Import Decimal as well
+from json import JSONEncoder # NEW: For custom JSON encoding
 
 from src.api.v1.router import router as v1_router
-from src.core.config.settings import settings # Import our application settings
+from src.core.config.settings import settings
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(settings.APP_NAME)
 
 # Set global Decimal precision at application startup
-getcontext().prec = settings.DECIMAL_PRECISION # NEW: Apply precision from settings
+getcontext().prec = settings.DECIMAL_PRECISION
+
+# NEW: Custom JSON encoder to handle Decimal objects
+# This ensures Decimal objects are serialized as strings in FastAPI's responses.
+# Pydantic (on the receiving end of the test) will then deserialize these strings back to Decimal.
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return str(obj)
+        return json.JSONEncoder.default(self, obj)
 
 # Create FastAPI app instance
 app = FastAPI(
@@ -23,6 +33,10 @@ app = FastAPI(
     debug=settings.DEBUG_MODE,
     description="API for processing and calculating costs of financial transactions using FIFO method."
 )
+
+# Apply custom JSON encoder to FastAPI
+# This requires overriding FastAPI's default json_encoder
+app.json_encoder = DecimalEncoder # NEW: Apply custom Decimal encoder
 
 # Include API routers
 app.include_router(v1_router, prefix=settings.API_V1_STR)
