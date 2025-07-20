@@ -119,6 +119,19 @@ poetry run uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
   * `--port 8000`: Runs the server on port 8000.
   * `--reload`: Enables auto-reloading on code changes (great for development).
 
+
+## Running Tests
+
+To run the unit and integration tests, use pytest via Poetry:
+
+`poetry run pytest`
+
+To run tests and see code coverage:
+
+
+`poetry run pytest --cov=src`
+
+
 ## API Usage
 
 The core functionality is exposed via a single POST endpoint.
