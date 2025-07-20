@@ -9,7 +9,8 @@ from src.logic.sorter import TransactionSorter
 from src.logic.disposition_engine import DispositionEngine
 from src.logic.cost_calculator import CostCalculator
 from src.logic.error_reporter import ErrorReporter
-from src.core.enums.transaction_type import TransactionType # Needed for filtering
+from src.core.enums.transaction_type import TransactionType
+from decimal import Decimal # NEW: Import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -55,15 +56,13 @@ class TransactionProcessor:
 
         # Identify which transaction_ids belong to the new set for final filtering
         new_transaction_ids = {txn.transaction_id for txn in parsed_new_transactions}
-        existing_transaction_ids = {txn.transaction_id for txn in parsed_existing_transactions} # NEW: Keep track of existing IDs
+        existing_transaction_ids = {txn.transaction_id for txn in parsed_existing_transactions}
 
         # Filter out transactions that already have a parsing error before sorting and processing
-        # These lists now contain Transaction objects.
         sortable_existing_transactions = [txn for txn in parsed_existing_transactions if not txn.error_reason]
         sortable_new_transactions = [txn for txn in parsed_new_transactions if not txn.error_reason]
 
-        # 3. Sort all transactions chronologically (delegating merging and sorting to sorter)
-        # This list includes ALL transactions (existing and new) in their correct processing order.
+        # 3. Sort all transactions chronologically (merging and sorting all into a single sequence)
         sorted_transactions = self._sorter.sort_transactions(
             existing_transactions=sortable_existing_transactions,
             new_transactions=sortable_new_transactions
@@ -71,28 +70,25 @@ class TransactionProcessor:
         logger.debug(f"Sorted {len(sorted_transactions)} transactions (combined existing and new).")
 
         # 4. Initialize disposition engine with existing, successfully parsed BUY transactions
-        # MODIFIED: Extract existing BUY transactions from the GLOBALLY sorted list.
-        # This ensures the disposition engine receives lots in the correct chronological order.
+        # This extracts only the existing BUYs from the globally sorted list.
         initial_buy_lots_for_disposition_engine = [
             txn for txn in sorted_transactions 
-            if txn.transaction_id in existing_transaction_ids # It's an existing transaction
-            and txn.transaction_type == TransactionType.BUY # It's a BUY transaction
-            and txn.quantity > Decimal(0) # And has a positive quantity
+            if txn.transaction_id in existing_transaction_ids 
+            and txn.transaction_type == TransactionType.BUY 
+            and txn.quantity > Decimal(0) 
         ]
         self._disposition_engine.set_initial_lots(initial_buy_lots_for_disposition_engine)
-        logger.debug(f"Disposition engine initialized with existing BUY lots: {[txn.transaction_id for txn in initial_buy_lots_for_disposition_engine]}.") # LOGGING
+        logger.debug(f"Disposition engine initialized with existing BUY lots: {[txn.transaction_id for txn in initial_buy_lots_for_disposition_engine]}.")
 
-        processed_transactions: list[Transaction] = [] # To store successfully processed NEW transactions
+        processed_transactions: list[Transaction] = [] 
         
         # 5. Process all sorted transactions
         for transaction in sorted_transactions:
-            # Skip if transaction already has an error from parsing.
             if transaction.error_reason:
                 continue 
 
-            # Only calculate costs for NEW transactions (existing ones are just for disposition engine state).
-            # We also ensure it's not an existing BUY transaction, as those are already handled by initial_lots.
-            # This logic avoids re-processing existing BUYs.
+            # Only calculate costs for NEW transactions.
+            # Existing BUYs are handled by initial_lots. Other existing types (SELL, DIVIDEND) are assumed pre-processed.
             if transaction.transaction_id in new_transaction_ids:
                 try:
                     self._cost_calculator.calculate_transaction_costs(transaction)
@@ -105,16 +101,9 @@ class TransactionProcessor:
                     logger.error(f"Unexpected error during cost calculation for transaction {transaction.transaction_id}: {e}")
                     transaction.error_reason = f"Unexpected processing error: {type(e).__name__}: {str(e)}"
                     self._error_reporter.add_error(transaction.transaction_id, transaction.error_reason) 
-            # ELSE: It's an existing transaction. If it's a BUY, it's already used for initial_lots.
-            # If it's an existing SELL, INTEREST, DIVIDEND etc. it's assumed to be already processed,
-            # and is only included in sorted_transactions to correctly establish lot order for NEW sells.
-            # It should not be added to processed_transactions output.
 
-
-        # 6. Collect all errors reported during parsing AND processing (now all from _error_reporter)
         final_errored_transactions = self._error_reporter.get_errors()
 
-        # 7. Filter processed transactions to return only those corresponding to the *new* input transactions.
         final_processed_new_transactions = [
             txn for txn in processed_transactions
             if txn.transaction_id in new_transaction_ids and not self._error_reporter.has_errors_for(txn.transaction_id)
