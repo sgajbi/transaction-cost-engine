@@ -8,7 +8,7 @@ from src.core.enums.transaction_type import TransactionType
 from src.logic.disposition_engine import DispositionEngine
 from src.logic.error_reporter import ErrorReporter
 
-# REMOVED: getcontext().prec = 10 (now in main.py)
+# Precision set in main.py
 
 class TransactionCostStrategy(Protocol):
     """
@@ -25,7 +25,7 @@ class TransactionCostStrategy(Protocol):
         Calculates the net cost, gross cost, and realized gain/loss for a transaction.
         Modifies the transaction object in place.
         """
-        ... # Protocol does not contain implementation details
+        ...
 
 
 class BuyStrategy:
@@ -37,27 +37,24 @@ class BuyStrategy:
         error_reporter: ErrorReporter
     ) -> None:
         """
-        Calculates Net Cost and Gross Cost for a BUY transaction.
-        Also adds the lot to the disposition engine (if quantity > 0).
+        Calculates Net Cost, Gross Cost, and Average Price for a BUY transaction.
+        Adds the lot to the disposition engine if quantity > 0.
         """
-        # Gross = gross_transaction_amount (as provided)
         transaction.gross_cost = Decimal(str(transaction.gross_transaction_amount))
 
-        # Net = gross + fees + accrued_interest
         total_fees = transaction.fees.total_fees if transaction.fees else Decimal(0)
         accrued_interest = Decimal(str(transaction.accrued_interest)) if transaction.accrued_interest is not None else Decimal(0)
 
         transaction.net_cost = transaction.gross_cost + total_fees + accrued_interest
 
-        if transaction.quantity > 0:
-            calculated_average_price = transaction.net_cost / Decimal(str(transaction.quantity))
+        if transaction.quantity > Decimal(0):
+            calculated_average_price = transaction.net_cost / transaction.quantity
             if transaction.average_price is None:
                 transaction.average_price = calculated_average_price
         else:
             transaction.average_price = Decimal(0)
 
-        # Only add the buy transaction as an open lot if quantity is greater than zero
-        if transaction.quantity > Decimal(0): # FIX: Add quantity check before calling add_buy_lot
+        if transaction.quantity > Decimal(0):
             try:
                 disposition_engine.add_buy_lot(transaction)
             except ValueError as e:
@@ -73,13 +70,17 @@ class SellStrategy:
         error_reporter: ErrorReporter
     ) -> None:
         """
-        Calculates Realized Gain/Loss for a SELL transaction using the disposition engine,
-        and sets gross_cost/net_cost to the negative of the matched cost.
+        Calculates Realized Gain/Loss for a SELL transaction using the disposition engine.
+        Selling fees are subtracted from proceeds for gain/loss calculation.
+        Gross/Net cost are set to the negative of the matched cost basis.
         """
         sell_quantity = Decimal(str(transaction.quantity))
-        sell_proceeds = Decimal(str(transaction.gross_transaction_amount))
+        gross_sell_proceeds = Decimal(str(transaction.gross_transaction_amount))
+        
+        # NEW: Subtract fees from proceeds for realized gain/loss calculation
+        sell_fees = transaction.fees.total_fees if transaction.fees else Decimal(0)
+        net_sell_proceeds = gross_sell_proceeds - sell_fees # Proceeds net of selling fees
 
-        # Use the generic consume_sell_quantity which delegates to the chosen strategy
         total_matched_cost, consumed_quantity, error_reason = \
             disposition_engine.consume_sell_quantity(transaction)
 
@@ -90,8 +91,9 @@ class SellStrategy:
             transaction.net_cost = Decimal(0)
             return
 
-        if consumed_quantity > 0:
-            transaction.realized_gain_loss = sell_proceeds - total_matched_cost
+        if consumed_quantity > Decimal(0):
+            # Realized Gain/Loss = Net Sell Proceeds - Matched Buy Cost
+            transaction.realized_gain_loss = net_sell_proceeds - total_matched_cost
             transaction.gross_cost = -total_matched_cost
             transaction.net_cost = -total_matched_cost
         else:
@@ -99,8 +101,8 @@ class SellStrategy:
             transaction.gross_cost = Decimal(0)
             transaction.net_cost = Decimal(0)
 
-        if sell_quantity > 0:
-            transaction.average_price = sell_proceeds / sell_quantity
+        if sell_quantity > Decimal(0):
+            transaction.average_price = gross_sell_proceeds / sell_quantity # Average price might still be gross
         else:
             transaction.average_price = Decimal(0)
 

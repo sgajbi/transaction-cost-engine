@@ -28,7 +28,6 @@ def client():
         yield c
 
 # Sample valid transaction data
-# MODIFIED: Default values are now Decimal
 def get_sample_buy_transaction(id="buy_new", qty=Decimal("10.0"), amount=Decimal("1000.0"), date_str="2023-01-05", brokerage_fee=Decimal("5.0")):
     return {
         "transaction_id": id,
@@ -41,11 +40,10 @@ def get_sample_buy_transaction(id="buy_new", qty=Decimal("10.0"), amount=Decimal
         "quantity": qty,
         "gross_transaction_amount": amount,
         "fees": {"brokerage": brokerage_fee},
-        "accrued_interest": Decimal("0.0"), # Ensure this is also Decimal
+        "accrued_interest": Decimal("0.0"),
         "trade_currency": "USD"
     }
 
-# MODIFIED: Default values are now Decimal
 def get_sample_sell_transaction(id="sell_new", qty=Decimal("5.0"), amount=Decimal("800.0"), date_str="2023-01-10", brokerage_fee=Decimal("3.0")):
     return {
         "transaction_id": id,
@@ -58,11 +56,10 @@ def get_sample_sell_transaction(id="sell_new", qty=Decimal("5.0"), amount=Decima
         "quantity": qty,
         "gross_transaction_amount": amount,
         "fees": {"brokerage": brokerage_fee},
-        "accrued_interest": Decimal("0.0"), # Ensure this is also Decimal
+        "accrued_interest": Decimal("0.0"),
         "trade_currency": "USD"
     }
 
-# MODIFIED: Default values are now Decimal
 def get_sample_interest_transaction(id="interest_new", amount=Decimal("10.0"), date_str="2023-01-01"):
     return {
         "transaction_id": id,
@@ -72,7 +69,7 @@ def get_sample_interest_transaction(id="interest_new", amount=Decimal("10.0"), d
         "transaction_type": "INTEREST",
         "transaction_date": f"{date_str}T00:00:00Z",
         "settlement_date": f"{date_str}T00:00:00Z",
-        "quantity": Decimal("0.0"), # Ensure this is also Decimal
+        "quantity": Decimal("0.0"),
         "gross_transaction_amount": amount,
         "trade_currency": "USD"
     }
@@ -130,8 +127,8 @@ def test_process_transactions_sell_with_existing_holdings(client, cost_method, m
     assert processed_sell.transaction_id == "sell_new"
     # Cost basis from existing buy (1050 / 10 = 105 per share)
     # Matched cost for 5 shares = 5 * 105 = 525
-    # Realized Gain/Loss = Sell proceeds - Matched Cost = 800 - 525 = 275
-    assert processed_sell.realized_gain_loss == Decimal("275.0")
+    # Realized Gain/Loss = Sell proceeds (800) - Matched Cost (525) - Sell Fees (3.0) = 800 - 525 - 3 = 272
+    assert processed_sell.realized_gain_loss == Decimal("272.0") # Corrected expected value: 800 - 525 - 3 = 272.0
     assert processed_sell.gross_cost == Decimal("-525.0") # Gross cost is matched cost (negative for sell)
     assert processed_sell.net_cost == Decimal("-525.0")   # Net cost is matched cost (negative for sell)
 
@@ -236,9 +233,9 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
 
     # New transactions
     new_transactions = [
-        get_sample_sell_transaction(id="N_S1", qty=Decimal("12"), amount=Decimal("1500"), date_str="2023-01-08"), # Sell 12 shares
-        get_sample_buy_transaction(id="N_B4", qty=Decimal("15"), amount=Decimal("1600"), date_str="2023-01-10"), # Buy 15 shares @ ~106.67
-        get_sample_sell_transaction(id="N_S2", qty=Decimal("20"), amount=Decimal("2200"), date_str="2023-01-12"), # Sell 20 shares
+        get_sample_sell_transaction(id="N_S1", qty=Decimal("12"), amount=Decimal("1500"), date_str="2023-01-08", brokerage_fee=Decimal("3.0")), # Sell 12 shares
+        get_sample_buy_transaction(id="N_B4", qty=Decimal("15"), amount=Decimal("1600"), date_str="2023-01-10", brokerage_fee=Decimal("5.0")), # Buy 15 shares @ ~106.67
+        get_sample_sell_transaction(id="N_S2", qty=Decimal("20"), amount=Decimal("2200"), date_str="2023-01-12", brokerage_fee=Decimal("3.0")), # Sell 20 shares
         get_sample_interest_transaction(id="N_I1", amount=Decimal("50"), date_str="2023-01-15") # Non-stock transaction
     ]
 
@@ -269,8 +266,8 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
         # - Consume 10 shares from E_B1: cost = 10 * 100.5 = 1005.0
         # - Consume 2 shares from E_B3: cost = 2 * 121.0 = 242.0
         # Total matched cost = 1005.0 + 242.0 = 1247.0
-        # Gain/Loss = 1500 (proceeds) - 1247.0 = 253.0
-        assert n_s1_processed.realized_gain_loss == Decimal("253.0") # Corrected expected value
+        # Gain/Loss = 1500 (gross proceeds) - 1247.0 (matched cost) - 3.0 (sell fees) = 250.0
+        assert n_s1_processed.realized_gain_loss == Decimal("250.0") # Corrected expected value
         assert n_s1_processed.gross_cost == Decimal("-1247.0") # Corrected expected value
     elif cost_method == CostMethod.AVERAGE_COST:
         # Initial AVCO:
@@ -280,8 +277,8 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
         # Total Qty = 10+20+5 = 35. Total Cost = 1005.0 + 2505.0 + 605.0 = 4115.0
         # Avg Cost = 4115.0 / 35 = 117.57142857...
         # Matched cost for 12 shares = 12 * (4115.0 / 35) = 1416.857142857...
-        # Gain/Loss = 1500 - 1416.857142857 = 83.142857143...
-        expected_avco_gain_loss_ns1 = Decimal("1500") - (Decimal("12") * (Decimal("4115.0") / Decimal("35")))
+        # Gain/Loss = 1500 (gross proceeds) - 1416.857142857 (matched cost) - 3.0 (sell fees) = 80.142857143...
+        expected_avco_gain_loss_ns1 = Decimal("1500") - (Decimal("12") * (Decimal("4115.0") / Decimal("35"))) - Decimal("3.0")
         assert n_s1_processed.realized_gain_loss == expected_avco_gain_loss_ns1.quantize(Decimal('0.01'))
         expected_avco_gross_cost_ns1 = -(Decimal("12") * (Decimal("4115.0") / Decimal("35")))
         assert n_s1_processed.gross_cost == expected_avco_gross_cost_ns1.quantize(Decimal('0.01'))
@@ -301,8 +298,8 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
         # - All 3 from E_B3_rem: cost = 3 * 121.0 = 363.0
         # - Remaining 17 shares from E_B2: cost = 17 * 125.25 = 2129.25
         # Total matched cost = 363.0 + 2129.25 = 2492.25
-        # Gain/Loss = 2200 (proceeds) - 2492.25 = -292.25
-        assert n_s2_processed.realized_gain_loss == Decimal("-292.25") # Corrected expected value
+        # Gain/Loss = 2200 (gross proceeds) - 2492.25 (matched cost) - 3.0 (sell fees) = -295.25
+        assert n_s2_processed.realized_gain_loss == Decimal("-295.25") # Corrected expected value
         assert n_s2_processed.gross_cost == Decimal("-2492.25") # Corrected expected value
     elif cost_method == CostMethod.AVERAGE_COST:
         # AVCO:
@@ -315,20 +312,20 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
         # Total Cost = 2698.142857143 + 1605.0 = 4303.142857143
         # New Avg Cost = 4303.142857143 / 38 = 113.2406015...
         # Matched cost for 20 shares = 20 * (4303.142857143 / 38) = 2264.811867...
-        # Gain/Loss = 2200 - 2264.811867 = -64.811867...
+        # Gain/Loss = 2200 (gross proceeds) - 2264.811867 (matched cost) - 3.0 (sell fees) = -67.811867...
         
         # Helper for AVCO calculations from previous state
         initial_qty = Decimal(35)
-        initial_cost = Decimal("4115.0") # Corrected initial cost calculation based on net_cost
+        initial_cost = Decimal("4115.0")
         
         after_ns1_qty = initial_qty - Decimal(12)
         after_ns1_cost = initial_cost - (Decimal(12) * initial_cost / initial_qty)
         
         after_nb4_qty = after_ns1_qty + Decimal(15)
-        after_nb4_cost = after_ns1_cost + Decimal("1605.0") # Use net_cost for N_B4
+        after_nb4_cost = after_ns1_cost + Decimal("1605.0")
         
         expected_avco_matched_cost_ns2 = Decimal(20) * (after_nb4_cost / after_nb4_qty)
-        expected_avco_gain_loss_ns2 = Decimal("2200") - expected_avco_matched_cost_ns2
+        expected_avco_gain_loss_ns2 = Decimal("2200") - expected_avco_matched_cost_ns2 - Decimal("3.0") # Subtract sell fees here too
 
         assert n_s2_processed.realized_gain_loss == expected_avco_gain_loss_ns2.quantize(Decimal('0.01'))
         assert n_s2_processed.gross_cost == -expected_avco_matched_cost_ns2.quantize(Decimal('0.01'))
