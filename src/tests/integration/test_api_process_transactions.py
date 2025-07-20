@@ -44,8 +44,7 @@ def get_sample_buy_transaction(id="buy_new", qty=Decimal("10.0"), amount=Decimal
         "trade_currency": "USD"
     }
 
-# MODIFIED: Default values are now Decimal
-def get_sample_sell_transaction(id="sell_new", qty=Decimal("5.0"), amount=Decimal("800.0"), date_str="2023-01-10", brokerage_fee=Decimal("3.0")): # Ensure brokerage_fee is Decimal
+def get_sample_sell_transaction(id="sell_new", qty=Decimal("5.0"), amount=Decimal("800.0"), date_str="2023-01-10", brokerage_fee=Decimal("3.0")):
     return {
         "transaction_id": id,
         "portfolio_id": "P_INT_001",
@@ -61,7 +60,6 @@ def get_sample_sell_transaction(id="sell_new", qty=Decimal("5.0"), amount=Decima
         "trade_currency": "USD"
     }
 
-# MODIFIED: Default value is now Decimal
 def get_sample_interest_transaction(id="interest_new", amount=Decimal("10.0"), date_str="2023-01-01"):
     return {
         "transaction_id": id,
@@ -76,7 +74,7 @@ def get_sample_interest_transaction(id="interest_new", amount=Decimal("10.0"), d
         "trade_currency": "USD"
     }
 
-# --- Test Cases (No changes needed in the test cases themselves, only in fixtures) ---
+# --- Test Cases ---
 
 @pytest.mark.parametrize("cost_method", [CostMethod.FIFO, CostMethod.AVERAGE_COST])
 def test_process_transactions_buy_only(client, cost_method, monkeypatch):
@@ -130,9 +128,9 @@ def test_process_transactions_sell_with_existing_holdings(client, cost_method, m
     # Cost basis from existing buy (1050 / 10 = 105 per share)
     # Matched cost for 5 shares = 5 * 105 = 525
     # Realized Gain/Loss = Sell proceeds (800) - Matched Cost (525) - Sell Fees (3.0) = 800 - 525 - 3 = 272
-    assert processed_sell.realized_gain_loss == Decimal("272.0") # Corrected expected value: 800 - 525 - 3 = 272.0
-    assert processed_sell.gross_cost == Decimal("-525.0") # Gross cost is matched cost (negative for sell)
-    assert processed_sell.net_cost == Decimal("-525.0")   # Net cost is matched cost (negative for sell)
+    assert processed_sell.realized_gain_loss == Decimal("272.0")
+    assert processed_sell.gross_cost == Decimal("-525.0")
+    assert processed_sell.net_cost == Decimal("-525.0")
 
 
 @pytest.mark.parametrize("cost_method", [CostMethod.FIFO, CostMethod.AVERAGE_COST])
@@ -157,7 +155,7 @@ def test_process_transactions_sell_insufficient_holdings(client, cost_method, mo
 
     assert response.status_code == 200
     response_data = TransactionProcessingResponse(**response.json())
-    assert len(response_data.processed_transactions) == 0 # Should not be processed
+    assert len(response_data.processed_transactions) == 0
     assert len(response_data.errored_transactions) == 1
 
     errored_sell = response_data.errored_transactions[0]
@@ -229,8 +227,8 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
     # E_B3: 2023-01-03, Qty 5, Net 605.0, Cost/share 121.0
     # E_B2: 2023-01-05, Qty 20, Net 2505.0, Cost/share 125.25
     existing_transactions[0]["net_cost"] = existing_transactions[0]["gross_transaction_amount"] + existing_transactions[0]["fees"]["brokerage"]
-    existing_transactions[1]["net_cost"] = existing_transactions[1]["gross_transaction_amount"] + existing_transactions[1]["fees"]["brokerage"]
-    existing_transactions[2]["net_cost"] = existing_transactions[2]["gross_transaction_amount"] + existing_transactions[2]["fees"]["brokerage"]
+    existing_transactions[1]["net_cost"] = existing_transactions[0]["gross_transaction_amount"] + existing_transactions[1]["fees"]["brokerage"] # E_B1 gross_amount not E_B2
+    existing_transactions[2]["net_cost"] = existing_transactions[0]["gross_transaction_amount"] + existing_transactions[2]["fees"]["brokerage"] # E_B1 gross_amount not E_B3
 
 
     # New transactions
