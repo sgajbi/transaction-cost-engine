@@ -6,7 +6,7 @@ import uvicorn
 import logging
 
 from src.api.v1 import transactions # Import our API router
-from config.settings import settings # Import our application settings
+from src.core.config.settings import settings # Corrected import path
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -17,7 +17,7 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     debug=settings.DEBUG_MODE,
-    description="API for processing and calculating costs of financial transactions using FIFO method."
+    description="API for processing and calculating costs of financial transactions using FIFO method." [cite: 57]
 )
 
 # Include API routers
@@ -35,6 +35,6 @@ if __name__ == "__main__":
         "src.api.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=settings.DEBUG_MODE, # Reloads on code changes if DEBUG_MODE is True
+        reload=settings.DEBUG_MODE, # Reloads on code changes if DEBUG_MODE is True [cite: 58]
         log_level=settings.LOG_LEVEL.lower()
     )

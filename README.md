@@ -48,32 +48,38 @@ A FastAPI-based microservice designed to process financial transactions, calcula
 ## Project Structure
 
 ```
+
 .
 ├── src/
 │   ├── api/
+│   │   ├── main.py
 │   │   └── v1/
-│   │       ├── __init__.py
+│   │       ├── init.py
 │   │       └── transactions.py   # FastAPI router for transaction processing
 │   ├── core/
+│   │   ├── config/             # NEW: Centralized application settings
+│   │   │   └── settings.py
 │   │   ├── enums/
-│   │   │   ├── __init__.py
+│   │   │   ├── init.py
 │   │   │   └── transaction_type.py # Defines TransactionType enum (BUY, SELL, etc.)
 │   │   └── models/
-│   │       ├── __init__.py
+│   │       ├── init.py
 │   │       ├── request.py      # Pydantic model for API request payload
 │   │       ├── response.py     # Pydantic model for API response payload
 │   │       └── transaction.py  # Pydantic model for a single Transaction object
 │   ├── logic/
-│   │   ├── __init__.py
+│   │   ├── init.py
 │   │   ├── cost_calculator.py  # Calculates gross/net cost and gain/loss based on strategy
 │   │   ├── disposition_engine.py # Manages cost lots (FIFO)
 │   │   ├── error_reporter.py   # Collects and manages processing errors
 │   │   ├── parser.py           # Parses raw transaction data into Transaction models
 │   │   └── sorter.py           # Sorts transactions for correct processing order
 │   └── services/
-│       ├── __init__.py
+│       ├── init.py
 │       └── transaction_processor.py # Orchestrates the end-to-end transaction flow
-├── .env.example                # Example environment variables (if any)
+├── .env.example                # Example environment variables (if any) 
+
+
 ├── poetry.lock                 # Poetry lock file
 ├── pyproject.toml              # Poetry project definition
 └── README.md                   # This file

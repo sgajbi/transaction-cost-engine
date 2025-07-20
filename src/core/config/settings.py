@@ -1,4 +1,4 @@
-# config/settings.py
+# src/core/config/settings.py
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
@@ -20,7 +20,7 @@ class AppSettings(BaseSettings):
 
     # Pydantic-settings configuration
     model_config = SettingsConfigDict(
-        env_file=str(Path(__file__).parent.parent / ".env"),
+        env_file=str(Path(__file__).parent.parent.parent / ".env"), # Adjusted path
         env_file_encoding='utf-8',
         case_sensitive=False, # Allows env vars like APP_NAME or app_name
         extra='ignore' # Ignore extra environment variables not defined in the model
