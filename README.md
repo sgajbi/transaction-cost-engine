@@ -122,6 +122,15 @@ poetry run uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 
 ## Running Tests
 
+
+To install pytest-env (if needed for integration tests that use environment variables):
+
+ 
+
+`poetry add --group dev pytest-env`
+
+
+
 To run the unit and integration tests, use pytest via Poetry:
 
 `poetry run pytest`

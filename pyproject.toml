@@ -20,7 +20,8 @@ dependencies = [
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.1"
 pytest-cov = "^6.2.1"
-pytest-mock = "^3.14.1"
+pytest-mock = "^3.14.0" # Ensure this is present
+pytest-env = "^1.1.3"   # NEW: For setting environment variables in tests
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
@@ -29,6 +30,5 @@ build-backend = "poetry.core.masonry.api"
 packages = [{include = "src"}]
 
 [tool.pytest.ini_options]
-# REMOVED: pythonpath = ["src"]
 addopts = "--import-mode=importlib"
 testpaths = ["src/tests"]
