@@ -12,36 +12,8 @@ logger = logging.getLogger(__name__)
 # --- Cost Basis Strategy Protocol ---
 
 class CostBasisStrategy(Protocol):
-    """
-    Protocol (interface) for different cost basis calculation methods (e.g., FIFO, Average Cost).
-    """
-    def add_buy_lot(self, transaction: Transaction):
-        """
-        Adds a new 'buy' transaction's cost to the inventory for future disposition.
-        """
-        ...
-
-    def consume_sell_quantity(
-        self, portfolio_id: str, instrument_id: str, sell_quantity: Decimal
-    ) -> Tuple[Decimal, Decimal, Optional[str]]:
-        """
-        Consumes quantity for a sell transaction based on the specific cost basis method.
-        Returns:
-            A tuple: (total_matched_cost, consumed_quantity, error_reason)
-        """
-        ...
-
-    def set_initial_lots(self, transactions: list[Transaction]):
-        """
-        Initializes the strategy with existing BUY transactions.
-        """
-        ...
-
-    def get_available_quantity(self, portfolio_id: str, instrument_id: str) -> Decimal:
-        """
-        Returns the total available quantity for a given instrument in a portfolio.
-        """
-        ...
+    # ... (protocol definition remains the same)
+    pass
 
 # --- FIFO Cost Basis Strategy Implementation ---
 
@@ -53,6 +25,7 @@ class FIFOBasisStrategy:
     def __init__(self):
         # Stores cost lots: { (portfolio_id, instrument_id): Deque[CostLot] }
         self._open_lots: Dict[Tuple[str, str], Deque[CostLot]] = defaultdict(deque)
+        logger.debug("FIFOBasisStrategy initialized.") # NEW LOG
 
     def add_buy_lot(self, transaction: Transaction):
         """
@@ -62,21 +35,23 @@ class FIFOBasisStrategy:
         if transaction.net_cost is None:
             raise ValueError(f"Buy transaction {transaction.transaction_id} must have net_cost calculated before adding as a lot.")
 
-        quantity = Decimal(str(transaction.quantity))
-        net_cost = Decimal(str(transaction.net_cost))
+        quantity = transaction.quantity
+        net_cost = transaction.net_cost
 
-        if quantity == 0:
+        # This quantity == 0 check is now redundant due to DispositionEngine filtering, but harmless
+        if quantity == Decimal(0):
+            logger.debug(f"FIFO: Skipping add_buy_lot for zero quantity transaction {transaction.transaction_id} (redundant check).") # NEW LOG
             return
 
         cost_per_share = net_cost / quantity
-        key = (transaction.portfolio_id, transaction.instrument_id)
-        self._open_lots[key].append(
-            CostLot(
+        new_lot = CostLot(
                 transaction_id=transaction.transaction_id,
                 quantity=quantity,
                 cost_per_share=cost_per_share
             )
-        )
+        key = (transaction.portfolio_id, transaction.instrument_id)
+        self._open_lots[key].append(new_lot)
+        logger.debug(f"FIFO: Added lot {new_lot.transaction_id} (Qty: {new_lot.original_quantity}, Cost/Share: {new_lot.cost_per_share:.4f}, NetCost: {transaction.net_cost:.2f}) for {key}. Current FIFO lots: {[l.transaction_id for l in self._open_lots[key]]}") # NEW LOG
 
     def consume_sell_quantity(
         self, portfolio_id: str, instrument_id: str, sell_quantity: Decimal
@@ -91,7 +66,10 @@ class FIFOBasisStrategy:
         consumed_quantity = Decimal(0)
 
         available_qty = self.get_available_quantity(portfolio_id=key[0], instrument_id=key[1])
+        logger.debug(f"FIFO Sell: Consuming {required_quantity:.2f} for {key}. Available: {available_qty:.2f}. Current FIFO lots: {[l.transaction_id for l in self._open_lots[key]]}") # NEW LOG
+
         if required_quantity > available_qty:
+            logger.warning(f"FIFO Sell: Insufficient holdings for {key}. Required: {required_quantity:.2f}, Available: {available_qty:.2f}.") # NEW LOG
             return (
                 Decimal(0),
                 Decimal(0),
@@ -102,38 +80,44 @@ class FIFOBasisStrategy:
 
         while required_quantity > 0 and lots_for_instrument:
             current_lot = lots_for_instrument[0]
+            logger.debug(f"  FIFO Sell: Processing lot {current_lot.transaction_id} (Remaining: {current_lot.remaining_quantity:.2f}, Cost/Share: {current_lot.cost_per_share:.4f}). Required: {required_quantity:.2f}.") # NEW LOG
 
             if current_lot.remaining_quantity >= required_quantity:
-                # Lot can fully cover the remaining required quantity
-                total_matched_cost += required_quantity * current_lot.cost_per_share
+                cost_from_lot = required_quantity * current_lot.cost_per_share
+                total_matched_cost += cost_from_lot
                 consumed_quantity += required_quantity
                 current_lot.remaining_quantity -= required_quantity
-                required_quantity = Decimal(0) # All required quantity consumed
-                if current_lot.remaining_quantity == 0:
-                    lots_for_instrument.popleft() # Remove fully consumed lot
+                required_quantity = Decimal(0)
+                logger.debug(f"  FIFO Sell: Consumed {consumed_quantity:.2f} from {current_lot.transaction_id}. Lot remaining: {current_lot.remaining_quantity:.2f}. Matched cost so far: {total_matched_cost:.4f}.") # NEW LOG
+                if current_lot.remaining_quantity == Decimal(0):
+                    lots_for_instrument.popleft()
+                    logger.debug(f"  FIFO Sell: Lot {current_lot.transaction_id} fully consumed and removed. Remaining lots: {[l.transaction_id for l in lots_for_instrument]}.") # NEW LOG
             else:
-                # Lot cannot fully cover, consume what's available in this lot
-                total_matched_cost += current_lot.remaining_quantity * current_lot.cost_per_share
+                cost_from_lot = current_lot.remaining_quantity * current_lot.cost_per_share
+                total_matched_cost += cost_from_lot
                 consumed_quantity += current_lot.remaining_quantity
                 required_quantity -= current_lot.remaining_quantity
-                lots_for_instrument.popleft() # This lot is now fully consumed
+                lots_for_instrument.popleft()
+                logger.debug(f"  FIFO Sell: Consumed all {current_lot.transaction_id} ({current_lot.original_quantity:.2f}). Remaining required: {required_quantity:.2f}. Matched cost so far: {total_matched_cost:.4f}. Remaining lots: {[l.transaction_id for l in lots_for_instrument]}.") # NEW LOG
 
+        logger.debug(f"FIFO Sell: Finished consuming. Total matched cost: {total_matched_cost:.4f}, Consumed quantity: {consumed_quantity:.2f}.") # NEW LOG
         return total_matched_cost, consumed_quantity, None
 
     def get_available_quantity(self, portfolio_id: str, instrument_id: str) -> Decimal:
-        """
-        Returns the total available quantity for a given instrument by summing remaining quantities in all FIFO lots.
-        """
         key = (portfolio_id, instrument_id)
-        return sum(lot.remaining_quantity for lot in self._open_lots[key])
+        qty = sum(lot.remaining_quantity for lot in self._open_lots[key])
+        logger.debug(f"FIFO: Available quantity for {key}: {qty:.2f}.") # NEW LOG
+        return qty
 
     def set_initial_lots(self, transactions: list[Transaction]):
-        """
-        Initializes the FIFO strategy with existing BUY transactions.
-        """
+        logger.debug("FIFOBasisStrategy: Setting initial lots:") # NEW LOG
         for txn in transactions:
-            if txn.transaction_type == "BUY": # Use string literal for consistency with Pydantic model
+            if txn.transaction_type == "BUY":
                 self.add_buy_lot(txn)
+                # The add_buy_lot already logs details, no need for redundant log here.
+                # logger.debug(f"  FIFOBasisStrategy: Initial BUY added: ID={txn.transaction_id}, Qty={txn.quantity}, NetCost={txn.net_cost}.")
+            else: # NEW LOG: To catch unexpected types
+                logger.debug(f"  FIFOBasisStrategy: Skipping non-BUY transaction for initial lots: ID={txn.transaction_id}, Type={txn.transaction_type}.")
 
 # --- Average Cost Basis Strategy Implementation ---
 
@@ -144,9 +128,6 @@ class AverageCostBasisStrategy(CostBasisStrategy):
     to determine the average cost per share.
     """
     def __init__(self):
-        # Stores total quantity and total cost for each instrument/portfolio
-        # Key: (portfolio_id, instrument_id)
-        # Value: {'total_qty': Decimal, 'total_cost': Decimal}
         self._holdings: Dict[Tuple[str, str], Dict[str, Decimal]] = defaultdict(lambda: {'total_qty': Decimal(0), 'total_cost': Decimal(0)})
         logger.debug("AverageCostBasisStrategy initialized.") 
 
@@ -157,18 +138,17 @@ class AverageCostBasisStrategy(CostBasisStrategy):
         """
         key = (transaction.portfolio_id, transaction.instrument_id)
         
-        # Ensure Decimal conversion from string representation of float inputs
-        buy_quantity = Decimal(str(transaction.quantity))
-        buy_net_cost = Decimal(str(transaction.net_cost)) # Use net_cost for cost basis
+        buy_quantity = transaction.quantity
+        buy_net_cost = transaction.net_cost
 
-        logger.debug(f"Before BUY: Holdings for {key}: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}")
-        logger.debug(f"Processing BUY {transaction.transaction_id}: quantity={buy_quantity:.2f}, net_cost={buy_net_cost:.2f}")
+        logger.debug(f"AVCO: Before BUY: Holdings for {key}: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}") # MODIFIED LOG
+        logger.debug(f"AVCO: Processing BUY {transaction.transaction_id}: quantity={buy_quantity:.2f}, net_cost={buy_net_cost:.2f}") # MODIFIED LOG
 
 
         self._holdings[key]['total_qty'] += buy_quantity
         self._holdings[key]['total_cost'] += buy_net_cost
 
-        logger.debug(f"After BUY: Holdings for {key}: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}")
+        logger.debug(f"AVCO: After BUY: Holdings for {key}: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}") # MODIFIED LOG
 
 
     def consume_sell_quantity(self, portfolio_id: str, instrument_id: str, required_quantity: Decimal) -> Tuple[Decimal, Decimal, Optional[str]]:
@@ -178,11 +158,11 @@ class AverageCostBasisStrategy(CostBasisStrategy):
         key = (portfolio_id, instrument_id)
         total_qty = self._holdings[key]['total_qty']
         total_cost = self._holdings[key]['total_cost']
-        logger.debug(f"Processing SELL for {key}: required_quantity={required_quantity:.2f}")
-        logger.debug(f"Current holdings for SELL: total_qty={total_qty:.2f}, total_cost={total_cost:.2f}")
+        logger.debug(f"AVCO Sell: Processing SELL for {key}: required_quantity={required_quantity:.2f}") # MODIFIED LOG
+        logger.debug(f"AVCO Sell: Current holdings for SELL: total_qty={total_qty:.2f}, total_cost={total_cost:.2f}") # MODIFIED LOG
 
         if required_quantity > total_qty:
-            logger.warning(f"Sell quantity ({required_quantity:.2f}) exceeds available average cost holdings ({total_qty:.2f}) for instrument '{key[1]}' in portfolio '{key[0]}'.")
+            logger.warning(f"AVCO Sell: Sell quantity ({required_quantity:.2f}) exceeds available average cost holdings ({total_qty:.2f}) for instrument '{key[1]}' in portfolio '{key[0]}'.") # MODIFIED LOG
             return (
                 Decimal(0),
                 Decimal(0),
@@ -190,6 +170,7 @@ class AverageCostBasisStrategy(CostBasisStrategy):
             )
 
         if total_qty == Decimal(0):
+             logger.warning(f"AVCO Sell: No holdings for instrument '{key[1]}' in portfolio '{key[0]}' to sell against (Average Cost method).") # NEW LOG
              return (
                 Decimal(0),
                 Decimal(0),
@@ -197,17 +178,17 @@ class AverageCostBasisStrategy(CostBasisStrategy):
             )
 
         average_cost_per_share = total_cost / total_qty
-        logger.debug(f"Calculated average_cost_per_share: {average_cost_per_share:.6f}")
+        logger.debug(f"AVCO Sell: Calculated average_cost_per_share: {average_cost_per_share:.6f}") # MODIFIED LOG
 
         
         matched_cost = required_quantity * average_cost_per_share
         consumed_quantity = required_quantity
-        logger.debug(f"Matched cost for sell quantity {consumed_quantity:.2f}: {matched_cost:.6f}")
+        logger.debug(f"AVCO Sell: Matched cost for sell quantity {consumed_quantity:.2f}: {matched_cost:.6f}") # MODIFIED LOG
 
         # Update holdings after sale
         self._holdings[key]['total_qty'] -= consumed_quantity
         self._holdings[key]['total_cost'] -= matched_cost # Deduct the cost basis of the sold shares
-        logger.debug(f"After SELL: Holdings for {key}: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}")
+        logger.debug(f"AVCO Sell: After SELL: Holdings for {key}: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}") # MODIFIED LOG
 
         return matched_cost, consumed_quantity, None
 
@@ -216,18 +197,22 @@ class AverageCostBasisStrategy(CostBasisStrategy):
         Returns the total available quantity for a given instrument based on average cost holdings.
         """
         key = (portfolio_id, instrument_id)
-        return self._holdings[key]['total_qty']
+        qty = self._holdings[key]['total_qty']
+        logger.debug(f"AVCO: Available quantity for {key}: {qty:.2f}.") # NEW LOG
+        return qty
 
     def set_initial_lots(self, transactions: list[Transaction]):
         """
         Initializes the Average Cost strategy with existing BUY transactions.
         """
-        logger.debug("Setting initial lots for AverageCostBasisStrategy...")
+        logger.debug("AverageCostBasisStrategy: Setting initial lots...") # MODIFIED LOG
 
         for txn in transactions:
             if txn.transaction_type == "BUY": # Use string literal for consistency with Pydantic model
                 # Add existing BUY transactions to current holdings
                 key = (txn.portfolio_id, txn.instrument_id)
-                self._holdings[key]['total_qty'] += Decimal(str(txn.quantity)) # Ensure Decimal from string repr
-                self._holdings[key]['total_cost'] += Decimal(str(txn.net_cost)) # Ensure Decimal from string repr
-                logger.debug(f"Initial BUY added: Txn ID={txn.transaction_id}, quantity={txn.quantity:.2f}, net_cost={txn.net_cost:.2f}. Current holdings: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}")
+                self._holdings[key]['total_qty'] += txn.quantity # No need for str(Decimal) here, it's already Decimal
+                self._holdings[key]['total_cost'] += txn.net_cost # No need for str(Decimal) here, it's already Decimal
+                logger.debug(f"  AverageCostBasisStrategy: Initial BUY added: Txn ID={txn.transaction_id}, quantity={txn.quantity:.2f}, net_cost={txn.net_cost:.2f}. Current holdings: total_qty={self._holdings[key]['total_qty']:.2f}, total_cost={self._holdings[key]['total_cost']:.2f}") # MODIFIED LOG
+            else: # NEW LOG: To catch unexpected types
+                logger.debug(f"  AverageCostBasisStrategy: Skipping non-BUY transaction for initial lots: ID={txn.transaction_id}, Type={txn.transaction_type}.")

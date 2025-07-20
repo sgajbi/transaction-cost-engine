@@ -215,22 +215,22 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
     monkeypatch.setenv("COST_BASIS_METHOD", cost_method.value)
 
     # Existing Buys (unsorted by date for realism, sorter should handle)
-    existing_transactions = [
-        get_sample_buy_transaction(id="E_B1", qty=Decimal("10"), amount=Decimal("1000"), date_str="2023-01-01", brokerage_fee=Decimal("5.0")), # Cost 100/share + 5.0 fee = 1005.0 net
-        get_sample_buy_transaction(id="E_B2", qty=Decimal("20"), amount=Decimal("2500"), date_str="2023-01-05", brokerage_fee=Decimal("5.0")), # Cost 125/share + 5.0 fee = 2505.0 net
-        get_sample_buy_transaction(id="E_B3", qty=Decimal("5"), amount=Decimal("600"), date_str="2023-01-03", brokerage_fee=Decimal("5.0")), # Cost 120/share + 5.0 fee = 605.0 net
+    # Create base transactions as dictionaries
+    existing_tx_data_base = [
+        get_sample_buy_transaction(id="E_B1", qty=Decimal("10"), amount=Decimal("1000"), date_str="2023-01-01", brokerage_fee=Decimal("5.0")), # Gross 1000, Fees 5.0
+        get_sample_buy_transaction(id="E_B2", qty=Decimal("20"), amount=Decimal("2500"), date_str="2023-01-05", brokerage_fee=Decimal("5.0")), # Gross 2500, Fees 5.0
+        get_sample_buy_transaction(id="E_B3", qty=Decimal("5"), amount=Decimal("600"), date_str="2023-01-03", brokerage_fee=Decimal("5.0")), # Gross 600, Fees 5.0
     ]
-    # Add net_cost to existing transactions for DispositionEngine initialization
-    # In a real scenario, these would already have costs computed from previous runs
-    # FIFO lots, sorted by date then quantity:
-    # E_B1: 2023-01-01, Qty 10, Net 1005.0, Cost/share 100.5
-    # E_B3: 2023-01-03, Qty 5, Net 605.0, Cost/share 121.0
-    # E_B2: 2023-01-05, Qty 20, Net 2505.0, Cost/share 125.25
     
-    # FIX: Ensure existing_transactions[X]["net_cost"] uses its own gross_transaction_amount
-    existing_transactions[0]["net_cost"] = existing_transactions[0]["gross_transaction_amount"] + existing_transactions[0]["fees"]["brokerage"]
-    existing_transactions[1]["net_cost"] = existing_transactions[1]["gross_transaction_amount"] + existing_transactions[1]["fees"]["brokerage"] # CORRECTED
-    existing_transactions[2]["net_cost"] = existing_transactions[2]["gross_transaction_amount"] + existing_transactions[2]["fees"]["brokerage"] # CORRECTED
+    # Deep copy and then calculate net_cost for existing transactions
+    # This ensures each existing_transaction dict is independent and its net_cost is correctly calculated based on its own amounts/fees
+    existing_transactions = []
+    for txn_data in existing_tx_data_base:
+        txn_copy = dict(txn_data) # Shallow copy is enough for top-level dict
+        txn_copy["net_cost"] = txn_copy["gross_transaction_amount"] + txn_copy["fees"]["brokerage"]
+        txn_copy["gross_cost"] = txn_copy["gross_transaction_amount"] # Gross cost for existing is its gross amount
+        txn_copy["average_price"] = txn_copy["net_cost"] / txn_copy["quantity"]
+        existing_transactions.append(txn_copy)
 
 
     # New transactions
@@ -330,3 +330,4 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
         expected_avco_gain_loss_ns2 = Decimal("2200") - expected_avco_matched_cost_ns2 - Decimal("3.0")
 
         assert n_s2_processed.realized_gain_loss == expected_avco_gain_loss_ns2.quantize(Decimal('0.01'))
+        assert n_s2_processed.gross_cost == -expected_avco_matched_cost_ns2.quantize(Decimal('0.01'))

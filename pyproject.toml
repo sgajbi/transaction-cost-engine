@@ -22,7 +22,7 @@ pytest = "^8.4.1"
 pytest-cov = "^6.2.1"
 pytest-mock = "^3.14.0"
 pytest-env = "^1.1.3"
-httpx = "^0.27.0" # NEW: Required for FastAPI's TestClient
+httpx = "^0.27.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
@@ -33,3 +33,5 @@ packages = [{include = "src"}]
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
 testpaths = ["src/tests"]
+log_cli = true      # NEW: Enable live logging to console during test run
+log_cli_level = "DEBUG" # NEW: Set logging level for console output to DEBUG

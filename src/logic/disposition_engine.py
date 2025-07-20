@@ -7,13 +7,9 @@ from src.core.models.transaction import Transaction
 from src.core.enums.transaction_type import TransactionType
 from src.logic.cost_basis_strategies import CostBasisStrategy, FIFOBasisStrategy, AverageCostBasisStrategy
 from src.logic.cost_objects import CostLot
+import logging 
 
-# REMOVED: Set precision for Decimal calculations (e.g., 10 decimal places)
-# REMOVED: getcontext().prec = 10 # This is now handled in main.py
-
-# The CostLot class itself is now in src/logic/cost_objects.py
-# class CostLot:
-#     ...
+logger = logging.getLogger(__name__) # NEW: Initialize logger
 
 class DispositionEngine:
     """
@@ -28,15 +24,20 @@ class DispositionEngine:
         Delegates adding a new BUY transaction to the active cost basis strategy.
         Prevents adding lots with zero quantity.
         """
-        if transaction.quantity == Decimal(0): # NEW CHECK
+        logger.debug(f"DispositionEngine: Attempting to add buy lot for TXN ID: {transaction.transaction_id}, Qty: {transaction.quantity}") # NEW LOG
+        if transaction.quantity == Decimal(0):
+            logger.debug(f"DispositionEngine: Skipping add_buy_lot for zero quantity TXN ID: {transaction.transaction_id}.") # NEW LOG
             return
         self._cost_basis_strategy.add_buy_lot(transaction)
+        logger.debug(f"DispositionEngine: Successfully delegated add_buy_lot for TXN ID: {transaction.transaction_id}.") # NEW LOG
 
     def get_available_quantity(self, portfolio_id: str, instrument_id: str) -> Decimal:
         """
         Delegates getting available quantity to the active cost basis strategy.
         """
-        return self._cost_basis_strategy.get_available_quantity(portfolio_id, instrument_id)
+        qty = self._cost_basis_strategy.get_available_quantity(portfolio_id, instrument_id)
+        logger.debug(f"DispositionEngine: Available quantity for {(portfolio_id, instrument_id)}: {qty}") # NEW LOG
+        return qty
 
     def consume_sell_quantity(
         self, transaction: Transaction
@@ -45,20 +46,31 @@ class DispositionEngine:
         Delegates consuming quantity for a SELL transaction to the active cost basis strategy.
         """
         sell_quantity = Decimal(str(transaction.quantity))
-        return self._cost_basis_strategy.consume_sell_quantity(
+        logger.debug(f"DispositionEngine: Consuming sell quantity for TXN ID: {transaction.transaction_id}, Qty: {sell_quantity}") # NEW LOG
+        total_matched_cost, consumed_quantity, error_reason = self._cost_basis_strategy.consume_sell_quantity(
             transaction.portfolio_id, transaction.instrument_id, sell_quantity
         )
+        if error_reason: # NEW LOG
+            logger.debug(f"DispositionEngine: Consumption failed for TXN ID: {transaction.transaction_id}, Error: {error_reason}")
+        else:
+            logger.debug(f"DispositionEngine: Consumption successful for TXN ID: {transaction.transaction_id}, Matched Cost: {total_matched_cost}, Consumed Qty: {consumed_quantity}")
+        return total_matched_cost, consumed_quantity, error_reason
 
     def set_initial_lots(self, transactions: list[Transaction]):
         """
         Delegates initializing the disposition engine with existing BUY transactions
         to the active cost basis strategy.
         """
-        # Note: The underlying strategies' add_buy_lot methods should handle zero quantity
-        # or it should be handled here before delegation. Handled here.
-        self._cost_basis_strategy.set_initial_lots([
-            txn for txn in transactions if txn.transaction_type == TransactionType.BUY and txn.quantity > Decimal(0) # Filter zero quantity buys here too
-        ])
+        logger.debug("DispositionEngine: Initializing with existing lots (before filtering for buys with quantity > 0):") # NEW LOG
+        for txn in transactions: # NEW LOGGING LOOP
+            logger.debug(f"  Received for initial: ID={txn.transaction_id}, Type={txn.transaction_type}, Qty={txn.quantity}, NetCost={txn.net_cost}") # NEW LOG
+        
+        filtered_buys = [
+            txn for txn in transactions if txn.transaction_type == TransactionType.BUY and txn.quantity > Decimal(0)
+        ]
+        logger.debug(f"DispositionEngine: Filtered initial BUY lots to pass to strategy: {[txn.transaction_id for txn in filtered_buys]}") # NEW LOG
+
+        self._cost_basis_strategy.set_initial_lots(filtered_buys)
 
     def get_all_open_lots(self) -> Dict[Tuple[str, str], Deque[CostLot]]:
         """
@@ -66,9 +78,8 @@ class DispositionEngine:
         Note: This method might not be directly applicable or fully representative
         for non-FIFO strategies (e.g., Average Cost).
         """
-        # This implementation requires specific attributes from FIFOBasisStrategy.
-        # If the active strategy is AverageCostBasisStrategy, it will raise an error.
         if isinstance(self._cost_basis_strategy, FIFOBasisStrategy):
+            logger.debug(f"DispositionEngine: Retrieving all open FIFO lots for debugging.") # NEW LOG
             return self._cost_basis_strategy._open_lots
         elif isinstance(self._cost_basis_strategy, AverageCostBasisStrategy):
              raise NotImplementedError("get_all_open_lots is not applicable for AverageCostBasisStrategy. Consider adding a method like get_all_current_holdings_average_cost to the strategy if needed.")
