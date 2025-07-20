@@ -49,19 +49,19 @@ A FastAPI-based microservice designed to process financial transactions, calcula
 
 ```
 
-.
 ├── src/
 │   ├── api/
 │   │   ├── main.py
 │   │   └── v1/
 │   │       ├── init.py
+│   │       ├── router.py         # NEW: Aggregates all v1 API routers
 │   │       └── transactions.py   # FastAPI router for transaction processing
 │   ├── core/
 │   │   ├── config/             # Centralized application settings
 │   │   │   └── settings.py
 │   │   ├── enums/
 │   │   │   ├── init.py
-│   │   │   └── cost_method.py
+│   │   │   ├── cost_method.py
 │   │   │   └── transaction_type.py # Defines TransactionType enum (BUY, SELL, etc.)
 │   │   └── models/
 │   │       ├── init.py

@@ -5,8 +5,9 @@ from fastapi.responses import RedirectResponse
 import uvicorn
 import logging
 
-from src.api.v1 import transactions # Import our API router
-from src.core.config.settings import settings # Corrected import path
+# NEW: Import the consolidated v1 router
+from src.api.v1.router import router as v1_router # Corrected import for v1 router
+from src.core.config.settings import settings # Import our application settings
 
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -17,11 +18,12 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     debug=settings.DEBUG_MODE,
-    description="API for processing and calculating costs of financial transactions using FIFO method." # Removed the erroneous citation
+    description="API for processing and calculating costs of financial transactions using FIFO method."
 )
 
 # Include API routers
-app.include_router(transactions.router, prefix=settings.API_V1_STR, tags=["Transactions"])
+# OLD: app.include_router(transactions.router, prefix=settings.API_V1_STR, tags=["Transactions"])
+app.include_router(v1_router, prefix=settings.API_V1_STR) # NEW: Include the consolidated v1 router without redundant tags
 
 @app.get("/", include_in_schema=False)
 async def root():
@@ -35,6 +37,6 @@ if __name__ == "__main__":
         "src.api.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=settings.DEBUG_MODE, # Reloads on code changes if DEBUG_MODE is True
+        reload=settings.DEBUG_MODE,
         log_level=settings.LOG_LEVEL.lower()
     )
