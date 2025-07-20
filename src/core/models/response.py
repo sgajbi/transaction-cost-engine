@@ -1,7 +1,7 @@
 # src/core/models/response.py
 
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict # NEW: Import ConfigDict
 from src.core.models.transaction import Transaction
 
 class ErroredTransaction(BaseModel):
@@ -26,7 +26,8 @@ class TransactionProcessingResponse(BaseModel):
         description="List of transactions that failed validation or processing, with error reasons."
     )
 
-    class Config:
+    # Replaced class Config with model_config
+    model_config = ConfigDict(
         json_schema_extra = {
             "example": {
                 "processed_transactions": [
@@ -74,4 +75,6 @@ class TransactionProcessingResponse(BaseModel):
                     }
                 ]
             }
-        }
+        },
+        extra='ignore'
+    )

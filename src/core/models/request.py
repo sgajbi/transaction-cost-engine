@@ -1,12 +1,9 @@
 # src/core/models/request.py
 
-import logging # Added
-from pydantic import BaseModel, Field
-# REMOVED: from src.core.models.transaction import Transaction
-# This import is no longer needed here because we are explicitly handling dictionaries
-# and letting the parser validate them into Transaction models.
+import logging
+from pydantic import BaseModel, Field, ConfigDict # NEW: Import ConfigDict
 
-logger = logging.getLogger(__name__) # Added
+logger = logging.getLogger(__name__)
 
 class TransactionProcessingRequest(BaseModel):
     """
@@ -23,7 +20,8 @@ class TransactionProcessingRequest(BaseModel):
         description="New transactions to be processed (raw dictionaries, including possible backdated ones)."
     )
 
-    class Config:
+    # Replaced class Config with model_config
+    model_config = ConfigDict(
         json_schema_extra = {
             "example": {
                 "existing_transactions": [
@@ -89,4 +87,6 @@ class TransactionProcessingRequest(BaseModel):
                     }
                 ]
             }
-        }
+        },
+        extra='ignore' # Added for robustness, ignore extra fields in input
+    )
