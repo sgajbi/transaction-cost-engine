@@ -91,8 +91,7 @@ class SellStrategy:
             # If disposition engine reports an error (e.g., insufficient quantity)
             error_reporter.add_error(transaction.transaction_id, error_reason)
             transaction.realized_gain_loss = None # Or Decimal(0), based on desired behavior for errored sells
-            # Mark the transaction as failed by setting error_reason directly on the transaction
-            transaction.error_reason = error_reason
+            # REMOVED: transaction.error_reason = error_reason # This is now handled by TransactionProcessor checking ErrorReporter
             # Even if errored, we can still set the costs to 0 or None if that's desired for errored sells
             transaction.gross_cost = Decimal(0)
             transaction.net_cost = Decimal(0)
@@ -138,10 +137,6 @@ class DefaultStrategy:
         # For simplicity, for these types, gross_cost and net_cost might just reflect
         # the transaction amount itself or zero if not applicable.
         # Adjust this logic based on exact business rules for each type.
-
-        # Example: For INTEREST, DIVIDEND, DEPOSIT, WITHDRAWAL, FEE, OTHER
-        # Net and Gross cost might just be the provided gross/net transaction amount,
-        # or it might be treated as 0 as it doesn't represent an 'asset acquisition cost'.
         # Assuming for now they represent the amount of value itself.
         transaction.gross_cost = Decimal(str(transaction.gross_transaction_amount))
         # Use provided net_transaction_amount if available, otherwise default to gross
@@ -193,8 +188,7 @@ class CostCalculator:
                 transaction.transaction_id,
                 f"Unknown transaction type '{transaction.transaction_type}'. Cannot calculate costs."
             )
-            # Mark the transaction as failed and skip calculation
-            transaction.error_reason = f"Unknown transaction type '{transaction.transaction_type}'."
+            # REMOVED: transaction.error_reason = f"Unknown transaction type '{transaction.transaction_type}'."
             return
 
         strategy = self._strategies.get(transaction_type_enum, self._default_strategy)
