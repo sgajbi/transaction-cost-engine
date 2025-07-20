@@ -61,6 +61,7 @@ A FastAPI-based microservice designed to process financial transactions, calcula
 │   │   │   └── settings.py
 │   │   ├── enums/
 │   │   │   ├── init.py
+│   │   │   └── cost_method.py
 │   │   │   └── transaction_type.py # Defines TransactionType enum (BUY, SELL, etc.)
 │   │   └── models/
 │   │       ├── init.py
@@ -71,14 +72,14 @@ A FastAPI-based microservice designed to process financial transactions, calcula
 │   │   ├── init.py
 │   │   ├── cost_basis_strategies.py # Implements different cost basis methods
 │   │   ├── cost_calculator.py  # Calculates gross/net cost and gain/loss based on strategy
-│   │   ├── cost_objects.py     # NEW: Shared data structures for cost logic (e.g., CostLot)
+│   │   ├── cost_objects.py     # Shared data structures for cost logic (e.g., CostLot)
 │   │   ├── disposition_engine.py # Manages cost lots (FIFO)
 │   │   ├── error_reporter.py   # Collects and manages processing errors
 │   │   ├── parser.py           # Parses raw transaction data into Transaction models
 │   │   └── sorter.py           # Sorts transactions for correct processing order
-│   └── services/
-│       ├── init.py
-│       └── transaction_processor.py # Orchestrates the end-to-end transaction flow
+│   ├── services/
+│   │   ├── init.py
+│   │   └── transaction_processor.py # Orchestrates the end-to-end transaction flow
 ├── .env.example                # Example environment variables (if any)
 ├── poetry.lock                 # Poetry lock file
 ├── pyproject.toml              # Poetry project definition
@@ -86,6 +87,7 @@ A FastAPI-based microservice designed to process financial transactions, calcula
 ```
 
 ## Setup and Installation
+
 
 ### Prerequisites
 
