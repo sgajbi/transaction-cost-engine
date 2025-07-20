@@ -28,4 +28,6 @@ build-backend = "poetry.core.masonry.api"
 packages = [{include = "src"}]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+# REMOVED: pythonpath = ["src"]
+addopts = "--import-mode=importlib"
+testpaths = ["src/tests"]
