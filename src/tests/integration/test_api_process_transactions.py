@@ -80,6 +80,7 @@ def get_sample_interest_transaction(id="interest_new", amount=10.0, date_str="20
 @pytest.mark.parametrize("cost_method", [CostMethod.FIFO, CostMethod.AVERAGE_COST])
 def test_process_transactions_buy_only(client, cost_method, monkeypatch):
     """Test processing a single BUY transaction."""
+    # Temporarily set the COST_BASIS_METHOD for this test
     monkeypatch.setenv("COST_BASIS_METHOD", cost_method.value)
 
     request_body = {
@@ -112,13 +113,12 @@ def test_process_transactions_sell_with_existing_holdings(client, cost_method, m
     existing_buy["average_price"] = Decimal("105.0")
 
     # New sell: 5 shares @ 800
-    new_sell = get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="2023-01-02")
+    new_sell = get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="2023-01-02") # Earlier date for FIFO order
 
     request_body = {
         "existing_transactions": [existing_buy],
         "new_transactions": [new_sell]
     }
-    # MODIFIED: Convert Decimals to string for JSON serialization
     response = client.post("/api/v1/process", json=decimal_to_str(request_body)) 
 
     assert response.status_code == 200
@@ -154,7 +154,6 @@ def test_process_transactions_sell_insufficient_holdings(client, cost_method, mo
         "existing_transactions": [existing_buy],
         "new_transactions": [new_sell]
     }
-    # MODIFIED: Convert Decimals to string for JSON serialization
     response = client.post("/api/v1/process", json=decimal_to_str(request_body)) 
 
     assert response.status_code == 200
@@ -176,7 +175,6 @@ def test_process_transactions_invalid_input_validation_error(client):
         "existing_transactions": [],
         "new_transactions": [invalid_buy_data]
     }
-    # MODIFIED: Convert Decimals to string for JSON serialization
     response = client.post("/api/v1/process", json=decimal_to_str(request_body)) 
 
     assert response.status_code == 200
@@ -199,7 +197,6 @@ def test_process_transactions_mixed_valid_and_invalid_input(client):
         "existing_transactions": [],
         "new_transactions": [valid_buy, invalid_sell]
     }
-    # MODIFIED: Convert Decimals to string for JSON serialization
     response = client.post("/api/v1/process", json=decimal_to_str(request_body)) 
 
     assert response.status_code == 200
@@ -222,13 +219,16 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
 
     # Existing Buys (unsorted by date for realism, sorter should handle)
     existing_transactions = [
-        get_sample_buy_transaction(id="E_B1", qty=Decimal("10"), amount=Decimal("1000"), date_str="2023-01-01", brokerage_fee=Decimal("5.0")), # Cost 100/share
-        get_sample_buy_transaction(id="E_B2", qty=Decimal("20"), amount=Decimal("2500"), date_str="2023-01-05", brokerage_fee=Decimal("5.0")), # Cost 125/share
-        get_sample_buy_transaction(id="E_B3", qty=Decimal("5"), amount=Decimal("600"), date_str="2023-01-03", brokerage_fee=Decimal("5.0")), # Cost 120/share
+        get_sample_buy_transaction(id="E_B1", qty=Decimal("10"), amount=Decimal("1000"), date_str="2023-01-01", brokerage_fee=Decimal("5.0")), # Cost 100/share + 5.0 fee = 1005.0 net
+        get_sample_buy_transaction(id="E_B2", qty=Decimal("20"), amount=Decimal("2500"), date_str="2023-01-05", brokerage_fee=Decimal("5.0")), # Cost 125/share + 5.0 fee = 2505.0 net
+        get_sample_buy_transaction(id="E_B3", qty=Decimal("5"), amount=Decimal("600"), date_str="2023-01-03", brokerage_fee=Decimal("5.0")), # Cost 120/share + 5.0 fee = 605.0 net
     ]
     # Add net_cost to existing transactions for DispositionEngine initialization
     # In a real scenario, these would already have costs computed from previous runs
-    # For FIFO: B1 (Jan 1, 10@100), B3 (Jan 3, 5@120), B2 (Jan 5, 20@125)
+    # FIFO lots, sorted by date then quantity:
+    # E_B1: 2023-01-01, Qty 10, Net 1005.0, Cost/share 100.5
+    # E_B3: 2023-01-03, Qty 5, Net 605.0, Cost/share 121.0
+    # E_B2: 2023-01-05, Qty 20, Net 2505.0, Cost/share 125.25
     existing_transactions[0]["net_cost"] = existing_transactions[0]["gross_transaction_amount"] + existing_transactions[0]["fees"]["brokerage"]
     existing_transactions[1]["net_cost"] = existing_transactions[1]["gross_transaction_amount"] + existing_transactions[1]["fees"]["brokerage"]
     existing_transactions[2]["net_cost"] = existing_transactions[2]["gross_transaction_amount"] + existing_transactions[2]["fees"]["brokerage"]
@@ -246,7 +246,6 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
         "existing_transactions": existing_transactions,
         "new_transactions": new_transactions
     }
-    # MODIFIED: Convert Decimals to string for JSON serialization
     response = client.post("/api/v1/process", json=decimal_to_str(request_body)) 
 
     assert response.status_code == 200
@@ -264,61 +263,69 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
     # Verify N_S1 (Sell 12 shares)
     n_s1_processed = processed_map["N_S1"]
     if cost_method == CostMethod.FIFO:
-        # FIFO: Consume 10 shares from E_B1 (cost 1000)
-        # Then consume 2 shares from E_B3 (cost 2 * 120 = 240)
-        # Total matched cost = 1000 + 240 = 1240
-        # Gain/Loss = 1500 (proceeds) - 1240 = 260
-        assert n_s1_processed.realized_gain_loss == Decimal("260.0")
-        assert n_s1_processed.gross_cost == Decimal("-1240.0")
+        # FIFO:
+        # Existing Lots (sorted by date, then quantity, then fees/cost): E_B1 (10@100.5), E_B3 (5@121), E_B2 (20@125.25)
+        # Sell 12 shares:
+        # - Consume 10 shares from E_B1: cost = 10 * 100.5 = 1005.0
+        # - Consume 2 shares from E_B3: cost = 2 * 121.0 = 242.0
+        # Total matched cost = 1005.0 + 242.0 = 1247.0
+        # Gain/Loss = 1500 (proceeds) - 1247.0 = 253.0
+        assert n_s1_processed.realized_gain_loss == Decimal("253.0") # Corrected expected value
+        assert n_s1_processed.gross_cost == Decimal("-1247.0") # Corrected expected value
     elif cost_method == CostMethod.AVERAGE_COST:
-        # Initial AVCO: Total Qty = 10+20+5 = 35. Total Cost = 1000+2500+600 = 4100
-        # Avg Cost = 4100 / 35 = 117.142857...
-        # Matched cost for 12 shares = 12 * (4100/35) = 1405.7142857...
-        # Gain/Loss = 1500 - 1405.7142857 = 94.2857143
-        expected_avco_gain_loss_ns1 = Decimal("1500") - (Decimal("12") * (Decimal("4100") / Decimal("35")))
-        assert n_s1_processed.realized_gain_loss == expected_avco_gain_loss_ns1.quantize(Decimal('0.01')) # Quantize for comparison
-        expected_avco_gross_cost_ns1 = -(Decimal("12") * (Decimal("4100") / Decimal("35")))
+        # Initial AVCO:
+        # E_B1 net_cost: 1005.0 (10 shares)
+        # E_B2 net_cost: 2505.0 (20 shares)
+        # E_B3 net_cost: 605.0 (5 shares)
+        # Total Qty = 10+20+5 = 35. Total Cost = 1005.0 + 2505.0 + 605.0 = 4115.0
+        # Avg Cost = 4115.0 / 35 = 117.57142857...
+        # Matched cost for 12 shares = 12 * (4115.0 / 35) = 1416.857142857...
+        # Gain/Loss = 1500 - 1416.857142857 = 83.142857143...
+        expected_avco_gain_loss_ns1 = Decimal("1500") - (Decimal("12") * (Decimal("4115.0") / Decimal("35")))
+        assert n_s1_processed.realized_gain_loss == expected_avco_gain_loss_ns1.quantize(Decimal('0.01'))
+        expected_avco_gross_cost_ns1 = -(Decimal("12") * (Decimal("4115.0") / Decimal("35")))
         assert n_s1_processed.gross_cost == expected_avco_gross_cost_ns1.quantize(Decimal('0.01'))
     
     # Verify N_S2 (Sell 20 shares)
     n_s2_processed = processed_map["N_S2"]
     if cost_method == CostMethod.FIFO:
         # FIFO:
-        # Remaining holdings after N_S1: E_B3 (3 shares @ 120), E_B2 (20 shares @ 125)
-        # E_B3 (3 shares from 5 original)
-        # E_B2 (20 shares)
-        # Sorted FIFO lots: E_B3_remaining (3@120), E_B2 (20@125), N_B4 (15@106.67) - N_B4 is processed after N_S1
-        # Re-sort for FIFO: E_B3 (remaining 3@120), E_B2 (20@125), N_B4 (15@106.66666)
-
-        # N_S1 consumed E_B1 (10@100) and 2 from E_B3 (2@120).
-        # Remaining: E_B3: (5-2=3) at 120, E_B2: (20) at 125.
-        # Then N_B4 added: 15@1600/15 = 106.66666...
-        # So at N_S2 (Jan 12): lots are E_B3_rem (3@120), E_B2 (20@125), N_B4 (15@106.66666)
-        # Consume 20 shares from lots:
-        # - all 3 from E_B3 (3 * 120 = 360)
-        # - then 17 from E_B2 (17 * 125 = 2125)
-        # Total matched cost = 360 + 2125 = 2485
-        # Gain/Loss = 2200 (proceeds) - 2485 = -285
-        assert n_s2_processed.realized_gain_loss == Decimal("-285.0")
-        assert n_s2_processed.gross_cost == Decimal("-2485.0")
+        # Initial lots: E_B1 (10@100.5), E_B3 (5@121), E_B2 (20@125.25)
+        # After N_S1 (Sell 12 shares):
+        # - E_B1 fully consumed (10 shares)
+        # - E_B3 partially consumed (2 shares from 5 total). Remaining E_B3: 3 shares @ 121.0
+        # Remaining FIFO lots (sorted by date): E_B3_rem (3@121.0), E_B2 (20@125.25)
+        # Then N_B4 (Buy 15 shares, Net Cost: 1600 + 5 = 1605.0. Cost/share = 1605.0/15 = 107.0) is added.
+        # FIFO lots at N_S2: E_B3_rem (3@121.0), E_B2 (20@125.25), N_B4 (15@107.0)
+        # Consume 20 shares for N_S2 (Sell 20):
+        # - All 3 from E_B3_rem: cost = 3 * 121.0 = 363.0
+        # - Remaining 17 shares from E_B2: cost = 17 * 125.25 = 2129.25
+        # Total matched cost = 363.0 + 2129.25 = 2492.25
+        # Gain/Loss = 2200 (proceeds) - 2492.25 = -292.25
+        assert n_s2_processed.realized_gain_loss == Decimal("-292.25") # Corrected expected value
+        assert n_s2_processed.gross_cost == Decimal("-2492.25") # Corrected expected value
     elif cost_method == CostMethod.AVERAGE_COST:
         # AVCO:
-        # Initial: 35 shares @ 4100 cost (avg 117.142857...)
-        # After N_S1 (sold 12 shares): Remaining 35-12 = 23 shares. Remaining cost = 4100 - (12 * 4100/35) = 4100 - 1405.7142857 = 2694.2857143
-        # Then N_B4 (bought 15 shares @ 1600) added: Total Qty = 23+15 = 38. Total Cost = 2694.2857143 + 1600 = 4294.2857143
-        # New Avg Cost = 4294.2857143 / 38 = 113.0075...
-        # Matched cost for 20 shares = 20 * (4294.2857143 / 38) = 2260.15...
-        # Gain/Loss = 2200 - 2260.15... = -60.15...
+        # Initial: Total Qty = 35. Total Cost = 4115.0
+        # After N_S1 (sold 12 shares):
+        # Qty = 35 - 12 = 23
+        # Cost = 4115.0 - (12 * 4115.0 / 35) = 4115.0 - 1416.857142857 = 2698.142857143
+        # Then N_B4 (bought 15 shares @ 1600 net 1605.0) added:
+        # Total Qty = 23 + 15 = 38
+        # Total Cost = 2698.142857143 + 1605.0 = 4303.142857143
+        # New Avg Cost = 4303.142857143 / 38 = 113.2406015...
+        # Matched cost for 20 shares = 20 * (4303.142857143 / 38) = 2264.811867...
+        # Gain/Loss = 2200 - 2264.811867 = -64.811867...
         
         # Helper for AVCO calculations from previous state
         initial_qty = Decimal(35)
-        initial_cost = Decimal(4100)
+        initial_cost = Decimal("4115.0") # Corrected initial cost calculation based on net_cost
         
         after_ns1_qty = initial_qty - Decimal(12)
         after_ns1_cost = initial_cost - (Decimal(12) * initial_cost / initial_qty)
         
         after_nb4_qty = after_ns1_qty + Decimal(15)
-        after_nb4_cost = after_ns1_cost + Decimal(1600)
+        after_nb4_cost = after_ns1_cost + Decimal("1605.0") # Use net_cost for N_B4
         
         expected_avco_matched_cost_ns2 = Decimal(20) * (after_nb4_cost / after_nb4_qty)
         expected_avco_gain_loss_ns2 = Decimal("2200") - expected_avco_matched_cost_ns2
