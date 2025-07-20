@@ -7,7 +7,7 @@ from src.core.models.response import TransactionProcessingResponse
 from src.core.enums.cost_method import CostMethod
 from decimal import Decimal
 from datetime import date
-import json # NEW: Import json for custom encoder
+import json
 
 # Helper function to serialize Decimal to string for JSON
 def decimal_to_str(obj):
@@ -24,12 +24,12 @@ def decimal_to_str(obj):
 @pytest.fixture(scope="module")
 def client():
     """Provides a TestClient for the FastAPI application."""
-    # Use 'with' statement for proper client lifecycle management
     with TestClient(app) as c:
         yield c
 
 # Sample valid transaction data
-def get_sample_buy_transaction(id="buy_new", qty=10.0, amount=1000.0, date_str="2023-01-05", brokerage_fee=5.0):
+# MODIFIED: Default values are now Decimal
+def get_sample_buy_transaction(id="buy_new", qty=Decimal("10.0"), amount=Decimal("1000.0"), date_str="2023-01-05", brokerage_fee=Decimal("5.0")):
     return {
         "transaction_id": id,
         "portfolio_id": "P_INT_001",
@@ -41,11 +41,12 @@ def get_sample_buy_transaction(id="buy_new", qty=10.0, amount=1000.0, date_str="
         "quantity": qty,
         "gross_transaction_amount": amount,
         "fees": {"brokerage": brokerage_fee},
-        "accrued_interest": 0.0,
+        "accrued_interest": Decimal("0.0"), # Ensure this is also Decimal
         "trade_currency": "USD"
     }
 
-def get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="2023-01-10", brokerage_fee=3.0):
+# MODIFIED: Default values are now Decimal
+def get_sample_sell_transaction(id="sell_new", qty=Decimal("5.0"), amount=Decimal("800.0"), date_str="2023-01-10", brokerage_fee=Decimal("3.0")):
     return {
         "transaction_id": id,
         "portfolio_id": "P_INT_001",
@@ -57,11 +58,12 @@ def get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="
         "quantity": qty,
         "gross_transaction_amount": amount,
         "fees": {"brokerage": brokerage_fee},
-        "accrued_interest": 0.0,
+        "accrued_interest": Decimal("0.0"), # Ensure this is also Decimal
         "trade_currency": "USD"
     }
 
-def get_sample_interest_transaction(id="interest_new", amount=10.0, date_str="2023-01-01"):
+# MODIFIED: Default values are now Decimal
+def get_sample_interest_transaction(id="interest_new", amount=Decimal("10.0"), date_str="2023-01-01"):
     return {
         "transaction_id": id,
         "portfolio_id": "P_INT_001",
@@ -70,7 +72,7 @@ def get_sample_interest_transaction(id="interest_new", amount=10.0, date_str="20
         "transaction_type": "INTEREST",
         "transaction_date": f"{date_str}T00:00:00Z",
         "settlement_date": f"{date_str}T00:00:00Z",
-        "quantity": 0.0,
+        "quantity": Decimal("0.0"), # Ensure this is also Decimal
         "gross_transaction_amount": amount,
         "trade_currency": "USD"
     }
@@ -80,14 +82,12 @@ def get_sample_interest_transaction(id="interest_new", amount=10.0, date_str="20
 @pytest.mark.parametrize("cost_method", [CostMethod.FIFO, CostMethod.AVERAGE_COST])
 def test_process_transactions_buy_only(client, cost_method, monkeypatch):
     """Test processing a single BUY transaction."""
-    # Temporarily set the COST_BASIS_METHOD for this test
     monkeypatch.setenv("COST_BASIS_METHOD", cost_method.value)
 
     request_body = {
         "existing_transactions": [],
         "new_transactions": [get_sample_buy_transaction()]
     }
-    # MODIFIED: Convert Decimals to string for JSON serialization
     response = client.post("/api/v1/process", json=decimal_to_str(request_body)) 
 
     assert response.status_code == 200
@@ -107,13 +107,13 @@ def test_process_transactions_sell_with_existing_holdings(client, cost_method, m
     monkeypatch.setenv("COST_BASIS_METHOD", cost_method.value)
 
     # Existing buy: 10 shares @ 100 (net 105 per share)
-    existing_buy = get_sample_buy_transaction(id="buy_existing", qty=10.0, amount=1000.0, date_str="2023-01-01", brokerage_fee=Decimal("5.0"))
+    existing_buy = get_sample_buy_transaction(id="buy_existing", qty=Decimal("10.0"), amount=Decimal("1000.0"), date_str="2023-01-01", brokerage_fee=Decimal("5.0"))
     existing_buy["net_cost"] = Decimal("1050.0") # Simulate pre-calculated net cost for existing
     existing_buy["gross_cost"] = Decimal("1000.0")
     existing_buy["average_price"] = Decimal("105.0")
 
     # New sell: 5 shares @ 800
-    new_sell = get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="2023-01-02") # Earlier date for FIFO order
+    new_sell = get_sample_sell_transaction(id="sell_new", qty=Decimal("5.0"), amount=Decimal("800.0"), date_str="2023-01-02") # Earlier date for FIFO order
 
     request_body = {
         "existing_transactions": [existing_buy],
@@ -142,13 +142,13 @@ def test_process_transactions_sell_insufficient_holdings(client, cost_method, mo
     monkeypatch.setenv("COST_BASIS_METHOD", cost_method.value)
 
     # Existing buy: 1 share @ 100
-    existing_buy = get_sample_buy_transaction(id="buy_existing", qty=1.0, amount=100.0, date_str="2023-01-01", brokerage_fee=Decimal("5.0"))
+    existing_buy = get_sample_buy_transaction(id="buy_existing", qty=Decimal("1.0"), amount=Decimal("100.0"), date_str="2023-01-01", brokerage_fee=Decimal("5.0"))
     existing_buy["net_cost"] = Decimal("105.0")
     existing_buy["gross_cost"] = Decimal("100.0")
     existing_buy["average_price"] = Decimal("100.0")
 
     # New sell: 5 shares (more than available)
-    new_sell = get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="2023-01-02")
+    new_sell = get_sample_sell_transaction(id="sell_new", qty=Decimal("5.0"), amount=Decimal("800.0"), date_str="2023-01-02")
 
     request_body = {
         "existing_transactions": [existing_buy],
