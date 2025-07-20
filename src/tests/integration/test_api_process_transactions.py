@@ -7,6 +7,19 @@ from src.core.models.response import TransactionProcessingResponse
 from src.core.enums.cost_method import CostMethod
 from decimal import Decimal
 from datetime import date
+import json # NEW: Import json for custom encoder
+
+# Helper function to serialize Decimal to string for JSON
+def decimal_to_str(obj):
+    if isinstance(obj, Decimal):
+        return str(obj)
+    # Handle dicts and lists recursively
+    if isinstance(obj, dict):
+        return {k: decimal_to_str(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [decimal_to_str(elem) for elem in obj]
+    return obj
+
 
 @pytest.fixture(scope="module")
 def client():
@@ -16,7 +29,7 @@ def client():
         yield c
 
 # Sample valid transaction data
-def get_sample_buy_transaction(id="buy_new", qty=10.0, amount=1000.0, date_str="2023-01-05", brokerage_fee=5.0): # ADDED brokerage_fee param
+def get_sample_buy_transaction(id="buy_new", qty=10.0, amount=1000.0, date_str="2023-01-05", brokerage_fee=5.0):
     return {
         "transaction_id": id,
         "portfolio_id": "P_INT_001",
@@ -27,12 +40,12 @@ def get_sample_buy_transaction(id="buy_new", qty=10.0, amount=1000.0, date_str="
         "settlement_date": f"{date_str}T00:00:00Z",
         "quantity": qty,
         "gross_transaction_amount": amount,
-        "fees": {"brokerage": brokerage_fee}, # Use param
+        "fees": {"brokerage": brokerage_fee},
         "accrued_interest": 0.0,
         "trade_currency": "USD"
     }
 
-def get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="2023-01-10", brokerage_fee=3.0): # ADDED brokerage_fee param
+def get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="2023-01-10", brokerage_fee=3.0):
     return {
         "transaction_id": id,
         "portfolio_id": "P_INT_001",
@@ -43,7 +56,7 @@ def get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="
         "settlement_date": f"{date_str}T00:00:00Z",
         "quantity": qty,
         "gross_transaction_amount": amount,
-        "fees": {"brokerage": brokerage_fee}, # Use param
+        "fees": {"brokerage": brokerage_fee},
         "accrued_interest": 0.0,
         "trade_currency": "USD"
     }
@@ -67,14 +80,14 @@ def get_sample_interest_transaction(id="interest_new", amount=10.0, date_str="20
 @pytest.mark.parametrize("cost_method", [CostMethod.FIFO, CostMethod.AVERAGE_COST])
 def test_process_transactions_buy_only(client, cost_method, monkeypatch):
     """Test processing a single BUY transaction."""
-    # Temporarily set the COST_BASIS_METHOD for this test
     monkeypatch.setenv("COST_BASIS_METHOD", cost_method.value)
 
     request_body = {
         "existing_transactions": [],
         "new_transactions": [get_sample_buy_transaction()]
     }
-    response = client.post("/api/v1/process", json=request_body)
+    # MODIFIED: Convert Decimals to string for JSON serialization
+    response = client.post("/api/v1/process", json=decimal_to_str(request_body)) 
 
     assert response.status_code == 200
     response_data = TransactionProcessingResponse(**response.json())
@@ -93,20 +106,20 @@ def test_process_transactions_sell_with_existing_holdings(client, cost_method, m
     monkeypatch.setenv("COST_BASIS_METHOD", cost_method.value)
 
     # Existing buy: 10 shares @ 100 (net 105 per share)
-    # Ensure brokerage_fee is Decimal
     existing_buy = get_sample_buy_transaction(id="buy_existing", qty=10.0, amount=1000.0, date_str="2023-01-01", brokerage_fee=Decimal("5.0"))
     existing_buy["net_cost"] = Decimal("1050.0") # Simulate pre-calculated net cost for existing
     existing_buy["gross_cost"] = Decimal("1000.0")
     existing_buy["average_price"] = Decimal("105.0")
 
     # New sell: 5 shares @ 800
-    new_sell = get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="2023-01-02") # Earlier date for FIFO order
+    new_sell = get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="2023-01-02")
 
     request_body = {
         "existing_transactions": [existing_buy],
         "new_transactions": [new_sell]
     }
-    response = client.post("/api/v1/process", json=request_body)
+    # MODIFIED: Convert Decimals to string for JSON serialization
+    response = client.post("/api/v1/process", json=decimal_to_str(request_body)) 
 
     assert response.status_code == 200
     response_data = TransactionProcessingResponse(**response.json())
@@ -141,7 +154,8 @@ def test_process_transactions_sell_insufficient_holdings(client, cost_method, mo
         "existing_transactions": [existing_buy],
         "new_transactions": [new_sell]
     }
-    response = client.post("/api/v1/process", json=request_body)
+    # MODIFIED: Convert Decimals to string for JSON serialization
+    response = client.post("/api/v1/process", json=decimal_to_str(request_body)) 
 
     assert response.status_code == 200
     response_data = TransactionProcessingResponse(**response.json())
@@ -162,9 +176,10 @@ def test_process_transactions_invalid_input_validation_error(client):
         "existing_transactions": [],
         "new_transactions": [invalid_buy_data]
     }
-    response = client.post("/api/v1/process", json=request_body)
+    # MODIFIED: Convert Decimals to string for JSON serialization
+    response = client.post("/api/v1/process", json=decimal_to_str(request_body)) 
 
-    assert response.status_code == 200 # FastAPI returns 200 OK with errored transactions in response body
+    assert response.status_code == 200
     response_data = TransactionProcessingResponse(**response.json())
     assert len(response_data.processed_transactions) == 0
     assert len(response_data.errored_transactions) == 1
@@ -184,7 +199,8 @@ def test_process_transactions_mixed_valid_and_invalid_input(client):
         "existing_transactions": [],
         "new_transactions": [valid_buy, invalid_sell]
     }
-    response = client.post("/api/v1/process", json=request_body)
+    # MODIFIED: Convert Decimals to string for JSON serialization
+    response = client.post("/api/v1/process", json=decimal_to_str(request_body)) 
 
     assert response.status_code == 200
     response_data = TransactionProcessingResponse(**response.json())
@@ -230,7 +246,8 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
         "existing_transactions": existing_transactions,
         "new_transactions": new_transactions
     }
-    response = client.post("/api/v1/process", json=request_body)
+    # MODIFIED: Convert Decimals to string for JSON serialization
+    response = client.post("/api/v1/process", json=decimal_to_str(request_body)) 
 
     assert response.status_code == 200
     response_data = TransactionProcessingResponse(**response.json())
@@ -271,7 +288,7 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
         # E_B3 (3 shares from 5 original)
         # E_B2 (20 shares)
         # Sorted FIFO lots: E_B3_remaining (3@120), E_B2 (20@125), N_B4 (15@106.67) - N_B4 is processed after N_S1
-        # Re-sort for FIFO: E_B3 (remaining 3@120), E_B2 (20@125), N_B4 (15@106.67)
+        # Re-sort for FIFO: E_B3 (remaining 3@120), E_B2 (20@125), N_B4 (15@106.66666)
 
         # N_S1 consumed E_B1 (10@100) and 2 from E_B3 (2@120).
         # Remaining: E_B3: (5-2=3) at 120, E_B2: (20) at 125.
