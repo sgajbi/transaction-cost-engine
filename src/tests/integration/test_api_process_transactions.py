@@ -16,7 +16,7 @@ def client():
         yield c
 
 # Sample valid transaction data
-def get_sample_buy_transaction(id="buy_new", qty=10.0, amount=1000.0, date_str="2023-01-05"):
+def get_sample_buy_transaction(id="buy_new", qty=10.0, amount=1000.0, date_str="2023-01-05", brokerage_fee=5.0): # ADDED brokerage_fee param
     return {
         "transaction_id": id,
         "portfolio_id": "P_INT_001",
@@ -27,12 +27,12 @@ def get_sample_buy_transaction(id="buy_new", qty=10.0, amount=1000.0, date_str="
         "settlement_date": f"{date_str}T00:00:00Z",
         "quantity": qty,
         "gross_transaction_amount": amount,
-        "fees": {"brokerage": 5.0},
+        "fees": {"brokerage": brokerage_fee}, # Use param
         "accrued_interest": 0.0,
         "trade_currency": "USD"
     }
 
-def get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="2023-01-10"):
+def get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="2023-01-10", brokerage_fee=3.0): # ADDED brokerage_fee param
     return {
         "transaction_id": id,
         "portfolio_id": "P_INT_001",
@@ -43,7 +43,7 @@ def get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="
         "settlement_date": f"{date_str}T00:00:00Z",
         "quantity": qty,
         "gross_transaction_amount": amount,
-        "fees": {"brokerage": 3.0},
+        "fees": {"brokerage": brokerage_fee}, # Use param
         "accrued_interest": 0.0,
         "trade_currency": "USD"
     }
@@ -93,10 +93,11 @@ def test_process_transactions_sell_with_existing_holdings(client, cost_method, m
     monkeypatch.setenv("COST_BASIS_METHOD", cost_method.value)
 
     # Existing buy: 10 shares @ 100 (net 105 per share)
-    existing_buy = get_sample_buy_transaction(id="buy_existing", qty=10.0, amount=1000.0, date_str="2023-01-01")
-    existing_buy["net_cost"] = 1050.0 # Simulate pre-calculated net cost for existing
-    existing_buy["gross_cost"] = 1000.0
-    existing_buy["average_price"] = 105.0
+    # Ensure brokerage_fee is Decimal
+    existing_buy = get_sample_buy_transaction(id="buy_existing", qty=10.0, amount=1000.0, date_str="2023-01-01", brokerage_fee=Decimal("5.0"))
+    existing_buy["net_cost"] = Decimal("1050.0") # Simulate pre-calculated net cost for existing
+    existing_buy["gross_cost"] = Decimal("1000.0")
+    existing_buy["average_price"] = Decimal("105.0")
 
     # New sell: 5 shares @ 800
     new_sell = get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="2023-01-02") # Earlier date for FIFO order
@@ -128,10 +129,10 @@ def test_process_transactions_sell_insufficient_holdings(client, cost_method, mo
     monkeypatch.setenv("COST_BASIS_METHOD", cost_method.value)
 
     # Existing buy: 1 share @ 100
-    existing_buy = get_sample_buy_transaction(id="buy_existing", qty=1.0, amount=100.0, date_str="2023-01-01")
-    existing_buy["net_cost"] = 100.0
-    existing_buy["gross_cost"] = 100.0
-    existing_buy["average_price"] = 100.0
+    existing_buy = get_sample_buy_transaction(id="buy_existing", qty=1.0, amount=100.0, date_str="2023-01-01", brokerage_fee=Decimal("5.0"))
+    existing_buy["net_cost"] = Decimal("105.0")
+    existing_buy["gross_cost"] = Decimal("100.0")
+    existing_buy["average_price"] = Decimal("100.0")
 
     # New sell: 5 shares (more than available)
     new_sell = get_sample_sell_transaction(id="sell_new", qty=5.0, amount=800.0, date_str="2023-01-02")
@@ -205,9 +206,9 @@ def test_process_transactions_complex_flow_fifo_vs_avco(client, cost_method, mon
 
     # Existing Buys (unsorted by date for realism, sorter should handle)
     existing_transactions = [
-        get_sample_buy_transaction(id="E_B1", qty=Decimal("10"), amount=Decimal("1000"), date_str="2023-01-01"), # Cost 100/share
-        get_sample_buy_transaction(id="E_B2", qty=Decimal("20"), amount=Decimal("2500"), date_str="2023-01-05"), # Cost 125/share
-        get_sample_buy_transaction(id="E_B3", qty=Decimal("5"), amount=Decimal("600"), date_str="2023-01-03"), # Cost 120/share
+        get_sample_buy_transaction(id="E_B1", qty=Decimal("10"), amount=Decimal("1000"), date_str="2023-01-01", brokerage_fee=Decimal("5.0")), # Cost 100/share
+        get_sample_buy_transaction(id="E_B2", qty=Decimal("20"), amount=Decimal("2500"), date_str="2023-01-05", brokerage_fee=Decimal("5.0")), # Cost 125/share
+        get_sample_buy_transaction(id="E_B3", qty=Decimal("5"), amount=Decimal("600"), date_str="2023-01-03", brokerage_fee=Decimal("5.0")), # Cost 120/share
     ]
     # Add net_cost to existing transactions for DispositionEngine initialization
     # In a real scenario, these would already have costs computed from previous runs

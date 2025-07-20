@@ -2,8 +2,8 @@
 
 from datetime import date
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field, condecimal, ConfigDict # NEW: Import ConfigDict
-from decimal import Decimal # Added for Decimal type hinting
+from pydantic import BaseModel, Field, condecimal, ConfigDict
+from decimal import Decimal
 
 class Fees(BaseModel):
     """
@@ -49,15 +49,14 @@ class Transaction(BaseModel):
     trade_currency: str = Field(..., alias="tradeCurrency", description="Currency of the transaction")
 
     # --- Computed / Enriched Fields
-    net_cost: Optional[condecimal(ge=0)] = Field(None, description="Calculated net cost for BUYs")
-    gross_cost: Optional[condecimal(ge=0)] = Field(None, description="Calculated gross cost for BUYs")
+    # MODIFIED: Removed ge=0 from net_cost and gross_cost to allow negative values for SELLs
+    net_cost: Optional[condecimal()] = Field(None, description="Calculated net cost for BUYs")
+    gross_cost: Optional[condecimal()] = Field(None, description="Calculated gross cost for BUYs")
     realized_gain_loss: Optional[condecimal()] = Field(None, description="Calculated realized gain/loss for SELLs")
     error_reason: Optional[str] = Field(None, description="Reason for transaction processing failure")
 
-    # Pydantic V2 configuration. Replaces 'class Config'.
     model_config = ConfigDict(
-        populate_by_name=True, # Allows using both alias and field name for input (e.g., 'portfolioId' or 'portfolio_id')
-        from_attributes=True, # For Pydantic v2, allows creating model from ORM objects (good practice)
-        # json_encoders is deprecated in Pydantic V2 and handled automatically for standard types like date/datetime.
-        arbitrary_types_allowed = False # Ensure strict typing
+        populate_by_name=True,
+        from_attributes=True,
+        arbitrary_types_allowed = False
     )
