@@ -15,7 +15,8 @@ class ErrorReporter:
 
     def add_error(self, transaction_id: str, error_reason: str):
         """
-        Adds an error for a specific transaction. If an error for the same
+        Adds an error for a specific transaction.
+        If an error for the same
         transaction ID already exists, it updates the reason or appends to it.
         """
         if transaction_id in self._errored_transactions:
@@ -36,7 +37,7 @@ class ErrorReporter:
         """
         self.add_error(errored_txn.transaction_id, errored_txn.error_reason)
 
-    def get_errors(self) -> list[ErroredTransaction]: # <--- CHANGED List to list
+    def get_errors(self) -> list[ErroredTransaction]:
         """
         Returns a list of all collected errored transactions.
         """
@@ -47,6 +48,12 @@ class ErrorReporter:
         Checks if any errors have been reported.
         """
         return bool(self._errored_transactions)
+
+    def has_errors_for(self, transaction_id: str) -> bool: # NEW METHOD
+        """
+        Checks if any errors have been reported for a specific transaction ID.
+        """
+        return transaction_id in self._errored_transactions
 
     def clear(self):
         """
