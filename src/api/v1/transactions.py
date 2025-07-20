@@ -4,13 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from src.core.models.request import TransactionProcessingRequest
 from src.core.models.response import TransactionProcessingResponse
 from src.services.transaction_processor import TransactionProcessor
-from src.logic.parser import TransactionParser
+from src.logic.parser import TransactionParser # Keep this import
 from src.logic.sorter import TransactionSorter
 from src.logic.disposition_engine import DispositionEngine
 from src.logic.cost_calculator import CostCalculator
-from src.logic.error_reporter import ErrorReporter
+from src.logic.error_reporter import ErrorReporter # Keep this import
 # NEW IMPORTS for configurable cost method
-from src.core.config.settings import settings # CORRECTED: Import settings from the consolidated file
+from src.core.config.settings import settings
 from src.core.enums.cost_method import CostMethod
 from src.logic.cost_basis_strategies import FIFOBasisStrategy, AverageCostBasisStrategy, CostBasisStrategy
 
@@ -22,7 +22,7 @@ def get_transaction_processor() -> TransactionProcessor:
     Provides a new instance of TransactionProcessor with its dependencies,
     configured with the selected cost basis method.
     """
-    error_reporter = ErrorReporter()
+    error_reporter = ErrorReporter() # Create the error reporter here
 
     # Determine which cost basis strategy to use based on configuration
     chosen_cost_basis_strategy: CostBasisStrategy
@@ -41,8 +41,11 @@ def get_transaction_processor() -> TransactionProcessor:
         disposition_engine=disposition_engine,
         error_reporter=error_reporter
     )
+    
+    # MODIFIED: Pass the error_reporter instance to the TransactionProcessor constructor
+    # The TransactionProcessor then passes it down to the TransactionParser it creates internally.
     return TransactionProcessor(
-        parser=TransactionParser(),
+        parser=TransactionParser(error_reporter=error_reporter), # FIX: Pass error_reporter here
         sorter=TransactionSorter(),
         disposition_engine=disposition_engine,
         cost_calculator=cost_calculator,
