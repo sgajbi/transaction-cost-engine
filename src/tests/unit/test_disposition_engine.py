@@ -28,13 +28,16 @@ def buy_transactions():
     return [
         Transaction(transaction_id="B1", portfolio_id="P1", instrument_id="A", security_id="S1",
                     transaction_type=TransactionType.BUY, transaction_date=date(2023, 1, 1), settlement_date=date(2023, 1, 3),
-                    quantity=Decimal("10"), gross_transaction_amount=Decimal("100"), net_cost=Decimal("100")), # Cost per share 10
+                    quantity=Decimal("10"), gross_transaction_amount=Decimal("100"), net_cost=Decimal("100"),
+                    trade_currency="USD"), # ADDED trade_currency
         Transaction(transaction_id="B2", portfolio_id="P1", instrument_id="A", security_id="S1",
                     transaction_type=TransactionType.BUY, transaction_date=date(2023, 1, 5), settlement_date=date(2023, 1, 7),
-                    quantity=Decimal("20"), gross_transaction_amount=Decimal("300"), net_cost=Decimal("300")), # Cost per share 15
+                    quantity=Decimal("20"), gross_transaction_amount=Decimal("300"), net_cost=Decimal("300"),
+                    trade_currency="USD"), # ADDED trade_currency
         Transaction(transaction_id="B3", portfolio_id="P1", instrument_id="B", security_id="S2",
                     transaction_type=TransactionType.BUY, transaction_date=date(2023, 1, 2), settlement_date=date(2023, 1, 4),
-                    quantity=Decimal("5"), gross_transaction_amount=Decimal("50"), net_cost=Decimal("50")), # Cost per share 10
+                    quantity=Decimal("5"), gross_transaction_amount=Decimal("50"), net_cost=Decimal("50"),
+                    trade_currency="USD"), # ADDED trade_currency
     ]
 
 @pytest.fixture
@@ -43,10 +46,12 @@ def sell_transactions():
     return [
         Transaction(transaction_id="S1", portfolio_id="P1", instrument_id="A", security_id="S1",
                     transaction_type=TransactionType.SELL, transaction_date=date(2023, 1, 10), settlement_date=date(2023, 1, 12),
-                    quantity=Decimal("15"), gross_transaction_amount=Decimal("250")),
+                    quantity=Decimal("15"), gross_transaction_amount=Decimal("250"),
+                    trade_currency="USD"), # ADDED trade_currency
         Transaction(transaction_id="S2", portfolio_id="P1", instrument_id="A", security_id="S1",
                     transaction_type=TransactionType.SELL, transaction_date=date(2023, 1, 15), settlement_date=date(2023, 1, 17),
-                    quantity=Decimal("20"), gross_transaction_amount=Decimal("400")),
+                    quantity=Decimal("20"), gross_transaction_amount=Decimal("400"),
+                    trade_currency="USD"), # ADDED trade_currency
     ]
 
 # --- Common Tests for Both Strategies (via DispositionEngine) ---
