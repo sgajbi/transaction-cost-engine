@@ -44,7 +44,8 @@ def get_sample_buy_transaction(id="buy_new", qty=Decimal("10.0"), amount=Decimal
         "trade_currency": "USD"
     }
 
-def get_sample_sell_transaction(id="sell_new", qty=Decimal("5.0"), amount=Decimal("800.0"), date_str="2023-01-10", brokerage_fee=Decimal("3.0")):
+# MODIFIED: Default values are now Decimal
+def get_sample_sell_transaction(id="sell_new", qty=Decimal("5.0"), amount=Decimal("800.0"), date_str="2023-01-10", brokerage_fee=Decimal("3.0")): # Ensure brokerage_fee is Decimal
     return {
         "transaction_id": id,
         "portfolio_id": "P_INT_001",
@@ -60,6 +61,7 @@ def get_sample_sell_transaction(id="sell_new", qty=Decimal("5.0"), amount=Decima
         "trade_currency": "USD"
     }
 
+# MODIFIED: Default value is now Decimal
 def get_sample_interest_transaction(id="interest_new", amount=Decimal("10.0"), date_str="2023-01-01"):
     return {
         "transaction_id": id,
@@ -74,7 +76,7 @@ def get_sample_interest_transaction(id="interest_new", amount=Decimal("10.0"), d
         "trade_currency": "USD"
     }
 
-# --- Test Cases ---
+# --- Test Cases (No changes needed in the test cases themselves, only in fixtures) ---
 
 @pytest.mark.parametrize("cost_method", [CostMethod.FIFO, CostMethod.AVERAGE_COST])
 def test_process_transactions_buy_only(client, cost_method, monkeypatch):
@@ -110,7 +112,7 @@ def test_process_transactions_sell_with_existing_holdings(client, cost_method, m
     existing_buy["average_price"] = Decimal("105.0")
 
     # New sell: 5 shares @ 800
-    new_sell = get_sample_sell_transaction(id="sell_new", qty=Decimal("5.0"), amount=Decimal("800.0"), date_str="2023-01-02") # Earlier date for FIFO order
+    new_sell = get_sample_sell_transaction(id="sell_new", qty=Decimal("5.0"), amount=Decimal("800.0"), date_str="2023-01-02")
 
     request_body = {
         "existing_transactions": [existing_buy],
