@@ -17,7 +17,7 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     debug=settings.DEBUG_MODE,
-    description="API for processing and calculating costs of financial transactions using FIFO method." [cite: 57]
+    description="API for processing and calculating costs of financial transactions using FIFO method." # Removed the erroneous citation
 )
 
 # Include API routers
@@ -35,6 +35,6 @@ if __name__ == "__main__":
         "src.api.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=settings.DEBUG_MODE, # Reloads on code changes if DEBUG_MODE is True [cite: 58]
+        reload=settings.DEBUG_MODE, # Reloads on code changes if DEBUG_MODE is True
         log_level=settings.LOG_LEVEL.lower()
     )
