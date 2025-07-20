@@ -10,7 +10,7 @@ from src.logic.disposition_engine import DispositionEngine
 from src.logic.cost_calculator import CostCalculator
 from src.logic.error_reporter import ErrorReporter
 # NEW IMPORTS for configurable cost method
-from src.core.config import settings
+from src.core.config.settings import settings # CORRECTED: Import settings from the consolidated file
 from src.core.enums.cost_method import CostMethod
 from src.logic.cost_basis_strategies import FIFOBasisStrategy, AverageCostBasisStrategy, CostBasisStrategy
 
@@ -35,7 +35,7 @@ def get_transaction_processor() -> TransactionProcessor:
         raise ValueError(f"Unknown COST_BASIS_METHOD: {settings.COST_BASIS_METHOD}")
 
     # Initialize DispositionEngine with the chosen strategy
-    disposition_engine = DispositionEngine(cost_basis_strategy=chosen_cost_basis_strategy) # MODIFIED: Pass strategy
+    disposition_engine = DispositionEngine(cost_basis_strategy=chosen_cost_basis_strategy)
 
     cost_calculator = CostCalculator(
         disposition_engine=disposition_engine,
@@ -55,7 +55,7 @@ def get_transaction_processor() -> TransactionProcessor:
     summary="Process financial transactions and calculate costs",
     description="Accepts new and existing transactions, merges, sorts, "
                 "calculates net cost, gross cost, and realized gain/loss "
-                "using the configured cost basis method (FIFO or Average Cost), " # MODIFIED: updated description
+                "using the configured cost basis method (FIFO or Average Cost), "
                 "and returns processed and errored transactions."
 )
 async def process_transactions_endpoint(

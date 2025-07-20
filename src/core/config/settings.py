@@ -2,10 +2,12 @@
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
+from src.core.enums.cost_method import CostMethod # Import CostMethod enum
 
-class AppSettings(BaseSettings):
+class Settings(BaseSettings): # Renamed AppSettings to Settings
     """
     Application settings loaded from environment variables or .env file.
+    Includes general app settings and cost basis method configuration.
     """
     # General App Settings
     APP_NAME: str = "Transaction Cost Engine API"
@@ -18,12 +20,15 @@ class AppSettings(BaseSettings):
     # Logging Settings
     LOG_LEVEL: str = "INFO" # e.g., DEBUG, INFO, WARNING, ERROR, CRITICAL
 
+    # Cost Calculation Settings (Moved from src/core/config.py)
+    COST_BASIS_METHOD: CostMethod = CostMethod.FIFO # Added from original src/core/config.py
+
     # Pydantic-settings configuration
     model_config = SettingsConfigDict(
-        env_file=str(Path(__file__).parent.parent.parent / ".env"), # Adjusted path
+        env_file=str(Path(__file__).parent.parent.parent / ".env"),
         env_file_encoding='utf-8',
         case_sensitive=False, # Allows env vars like APP_NAME or app_name
         extra='ignore' # Ignore extra environment variables not defined in the model
     )
 
-settings = AppSettings()
+settings = Settings() # Instantiated the new combined Settings class
